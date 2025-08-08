@@ -14,10 +14,18 @@
 
 - **Frontend**: React, TypeScript
 - **Backend**: Electron, Node.js
-- **Blockchain**: Solana Web3.js
+- **Blockchain**: Solana Web3.js, SPL Token
 - **Build**: Webpack, TypeScript
+- **UI**: CSS Modules, React DOM
 
 ## Установка
+
+### Требования
+- Node.js (версия 16 или выше)
+- npm или yarn
+- Подключение к интернету для работы с Solana RPC
+
+### Шаги установки
 
 1. Клонируйте репозиторий:
 ```bash
@@ -30,7 +38,17 @@ cd wallet-manager
 npm install
 ```
 
-## Сборка
+3. Создайте файл `wallets.json` в корне проекта:
+```json
+[
+  {
+    "name": "Wallet 1",
+    "secretKey": "your-secret-key-here"
+  }
+]
+```
+
+## Запуск
 
 Для сборки приложения:
 ```bash
