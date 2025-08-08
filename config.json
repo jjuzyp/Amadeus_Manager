@@ -1,0 +1,9 @@
+{
+  "solanaRpcUrl": "https://solana.drpc.org",
+  "solanaTokensRpcUrl": "https://solana.drpc.org",
+  "autoRefreshInterval": 999990000,
+  "delayBetweenRequests": 100,
+  "priorityFee": 200000,
+  "maxRetries": 3,
+  "confirmationTimeout": 30
+}
