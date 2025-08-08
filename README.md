@@ -62,14 +62,6 @@ npm start
 
 ## Конфигурация
 
-Создайте файл wallets.json и заполните его кошельками в формате
-[
-  {
-    "name": "Wallet 1",
-    "secretKey": "ht2jhhy45u43KASi58sdfjnASh3ht2jhhy45u43KASi58sdfjnASh3ht2jhhy45u43KASi58sdfjnASh3"
-  }
-]
-
 Настройки приложения находятся в файле `config.json`:
 
 - `solanaRpcUrl` - RPC для получения балансов SOL
