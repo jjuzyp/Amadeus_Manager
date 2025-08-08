@@ -21,7 +21,7 @@
 
 1. Клонируйте репозиторий:
 ```bash
-git clone https://github.com/your-username/wallet-manager.git
+git clone https://github.com/jjuzyp/WorkNameWalletManager.git
 cd wallet-manager
 ```
 
@@ -30,23 +30,16 @@ cd wallet-manager
 npm install
 ```
 
-3. Запустите приложение:
-```bash
-npm start
-```
-
-## Разработка
-
-Для запуска в режиме разработки:
-```bash
-npm run dev
-```
-
 ## Сборка
 
 Для сборки приложения:
 ```bash
 npm run build
+```
+
+Запустите приложение:
+```bash
+npm start
 ```
 
 ## Конфигурация
@@ -73,3 +66,5 @@ npm run build
 ## Лицензия
 
 ISC
+
+Это все писала нейросеть я чуть отредачил
