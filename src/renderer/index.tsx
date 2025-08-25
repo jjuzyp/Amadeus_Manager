@@ -1,13 +1,53 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Component, ErrorInfo, ReactNode } from 'react';
 import { loadWallets, getWalletPublicKey, parseSecretKey } from '../loadWallets';
 import { processWalletBalances, LoadingProgress } from '../balances';
 import { WalletData, TokenBalance, Config, WalletBalances } from '../types';
 import { sendSOL, sendSPLToken } from '../tokenSend';
 import { Connection, Keypair } from '@solana/web3.js';
+import { formatUsdValue, formatAddress } from '../utils';
 import LoadingIndicator from './LoadingIndicator';
 import TokenDetailView from './TokenDetailView';
 import TokenSendView from './TokenSendView';
+import SwapView from './SwapView';
 import './index.css';
+
+// Error Boundary компонент для обработки ошибок
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: Error }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Error caught by boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="error-boundary">
+          <h2>Что-то пошло не так</h2>
+          <p>Произошла ошибка в приложении. Попробуйте обновить страницу.</p>
+          <button onClick={() => window.location.reload()}>
+            Обновить страницу
+          </button>
+          {this.state.error && (
+            <details>
+              <summary>Детали ошибки</summary>
+              <pre>{this.state.error.toString()}</pre>
+            </details>
+          )}
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 // Компонент для основного вида кошелька
 const WalletMainView: React.FC<{
@@ -32,24 +72,51 @@ const WalletMainView: React.FC<{
   isEditing, editName, onCopyAddress, onUpdateWalletName, onTokenClick,
   onNameClick, onNameChange, onNameSave, onNameCancel, onKeyPress
 }) => {
-  const formatAddress = React.useCallback((addr: string) => {
-    return addr.length > 8 ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : addr;
-  }, []);
 
-  const formatUsdValue = React.useCallback((value: number) => {
-    if (value >= 1000000) {
-      return `$${(value / 1000000).toFixed(2)}M`;
-    } else if (value >= 1000) {
-      return `$${(value / 1000).toFixed(2)}K`;
-    } else {
-      return `$${value.toFixed(2)}`;
+
+  const copyToClipboard = React.useCallback(async () => {
+    try {
+      // Проверяем, что документ в фокусе
+      if (document.hasFocus()) {
+        await navigator.clipboard.writeText(address);
+        onCopyAddress(address);
+      } else {
+        // Fallback: используем старый API
+        const textArea = document.createElement('textarea');
+        textArea.value = address;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        onCopyAddress(address);
+      }
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+      // Fallback: используем старый API
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = address;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        onCopyAddress(address);
+      } catch (fallbackError) {
+        console.error('Fallback copy also failed:', fallbackError);
+        // Показываем адрес пользователю, если копирование не удалось
+        alert(`Адрес: ${address}`);
+      }
     }
-  }, []);
-
-  const copyToClipboard = React.useCallback(() => {
-    navigator.clipboard.writeText(address);
-    onCopyAddress(address);
   }, [address, onCopyAddress]);
+
+  // Мемоизируем отсортированные токены
+  const sortedTokens = React.useMemo(() => 
+    tokens
+      .sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount))
+      .map((token, index) => ({
+        ...token,
+        key: index
+      })), [tokens]);
 
   return (
     <>
@@ -79,37 +146,30 @@ const WalletMainView: React.FC<{
         {formatAddress(address)}
       </div>
       <div className="wallet-balances">
-                 <div className="token-item" onClick={() => onTokenClick({
-           mint: 'So11111111111111111111111111111111111111112',
-           amount: isNaN(balance) ? '0' : balance.toFixed(6),
-           decimals: 9,
-           symbol: 'SOL',
-           usdPrice: solPrice,
-           usdValue: solPrice && !isNaN(balance) ? balance * solPrice : undefined
-         })}>
-           <span className="token-mint">SOL</span>
-           <span className="token-amount" title={solPrice && !isNaN(balance) ? `$${(balance * solPrice).toFixed(2)}` : ''}>
-             {isNaN(balance) ? 'Loading...' : `${balance.toFixed(6)}`}
-           </span>
-         </div>
-        {tokens.length > 0 && (
-          <>
-            {React.useMemo(() => 
-              tokens
-                .sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount))
-                .map((token, index) => (
-                <div key={index} className="token-item" onClick={() => onTokenClick({
-                  ...token,
-                  amount: token.amount // Передаем то же значение, что отображается в основном окне
-                })}>
-                  <span className="token-mint">{token.symbol || token.mint.slice(0, 8) + '...'}</span>
-                  <span className="token-amount" title={token.usdValue ? `$${token.usdValue.toFixed(2)}` : ''}>
-                    {token.amount}
-                  </span>
-                </div>
-              )), [tokens, onTokenClick])}
-          </>
-        )}
+        <div className="token-item" onClick={() => onTokenClick({
+          mint: 'So11111111111111111111111111111111111111112',
+          amount: isNaN(balance) ? '0' : balance.toString(),
+          decimals: 9,
+          symbol: 'SOL',
+          usdPrice: solPrice,
+          usdValue: solPrice && !isNaN(balance) ? balance * solPrice : undefined
+        })}>
+          <span className="token-mint">SOL</span>
+          <span className="token-amount" title={solPrice && !isNaN(balance) ? `$${(balance * solPrice).toFixed(2)}` : ''}>
+            {isNaN(balance) ? 'Loading...' : `${balance.toFixed(9)}`}
+          </span>
+        </div>
+        {sortedTokens.map((token) => (
+          <div key={token.key} className="token-item" onClick={() => onTokenClick({
+            ...token,
+            amount: token.amount // Передаем то же значение, что отображается в основном окне
+          })}>
+            <span className="token-mint">{token.symbol || token.mint.slice(0, 8) + '...'}</span>
+            <span className="token-amount" title={token.usdValue ? `$${token.usdValue.toFixed(2)}` : ''}>
+              {token.amount}
+            </span>
+          </div>
+        ))}
       </div>
     </>
   );
@@ -126,13 +186,16 @@ const WalletCard: React.FC<{
   onCopyAddress: (address: string) => void;
   onCopyTokenAddress: (mint: string) => void;
   onUpdateWalletName: (address: string, newName: string) => void;
-}> = React.memo(({ wallet, balance, tokens, totalUsdValue, solPrice, availableWallets, config, onCopyAddress, onCopyTokenAddress, onUpdateWalletName }) => {
+  onForceUpdate: () => void;
+  onNotify: (message: string) => void;
+}> = React.memo(({ wallet, balance, tokens, totalUsdValue, solPrice, availableWallets, config, onCopyAddress, onCopyTokenAddress, onUpdateWalletName, onForceUpdate, onNotify }) => {
   // Мемоизируем вычисление адреса
   const address = React.useMemo(() => getWalletPublicKey(wallet), [wallet]);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(wallet.name);
   const [selectedToken, setSelectedToken] = useState<TokenBalance | null>(null);
   const [showSendView, setShowSendView] = useState(false);
+  const [showSwapView, setShowSwapView] = useState(false);
 
   const handleTokenClick = React.useCallback((token: TokenBalance) => {
     setSelectedToken(token);
@@ -141,10 +204,18 @@ const WalletCard: React.FC<{
   const handleBackToWallet = React.useCallback(() => {
     setSelectedToken(null);
     setShowSendView(false);
-  }, []);
+    setShowSwapView(false);
+    // Принудительно обновляем состояние редактирования
+    setIsEditing(false);
+    setEditName(wallet.name);
+  }, [wallet.name]);
 
   const handleSendClick = React.useCallback(() => {
     setShowSendView(true);
+  }, []);
+
+  const handleSwapClick = React.useCallback(() => {
+    setShowSwapView(true);
   }, []);
 
   const handleSendToken = React.useCallback(async (recipient: string, amount: string): Promise<void> => {
@@ -185,29 +256,55 @@ const WalletCard: React.FC<{
       
       if (result.success) {
         console.log('Transaction successful:', result.txid);
-        // Можно добавить уведомление об успешной отправке
-        alert(`Транзакция успешно отправлена! TXID: ${result.txid}`);
+        onNotify(`Транзакция успешно отправлена! TXID: ${result.txid}`);
       } else {
         console.error('Transaction failed:', result.error);
-        alert(`Ошибка отправки: ${result.error}`);
+        onNotify(`Ошибка отправки: ${result.error}`);
       }
       
       // Возвращаемся к детальному просмотру
       setShowSendView(false);
+      setSelectedToken(null);
     } catch (error) {
       console.error('Error sending token:', error);
-      alert(`Ошибка отправки: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+      onNotify(`Ошибка отправки: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+      // Принудительно возвращаемся к детальному просмотру даже при ошибке
+      setShowSendView(false);
+      setSelectedToken(null);
+    } finally {
+      // Принудительно восстанавливаем состояние компонента
+      setTimeout(() => {
+        setShowSendView(false);
+        setSelectedToken(null);
+        setIsEditing(false);
+        setEditName(wallet.name);
+        // Принудительно обновляем компонент
+        onForceUpdate();
+        try { window.focus(); } catch {}
+      }, 100);
     }
-  }, [selectedToken, wallet, config]);
+  }, [selectedToken, wallet, config, onNotify]);
+
+  // Принудительно обновляем состояние при изменении wallet
+  React.useEffect(() => {
+    setEditName(wallet.name);
+    setIsEditing(false);
+  }, [wallet.name]);
 
   const handleNameClick = () => {
     setIsEditing(true);
     setEditName(wallet.name);
   };
 
-  const handleNameSave = () => {
+  const handleNameSave = async () => {
     if (editName.trim() !== wallet.name) {
-      onUpdateWalletName(address, editName.trim());
+      try {
+        await onUpdateWalletName(address, editName.trim());
+      } catch (error) {
+        console.error('Error updating wallet name:', error);
+        // Возвращаем старое название при ошибке
+        setEditName(wallet.name);
+      }
     }
     setIsEditing(false);
   };
@@ -250,12 +347,21 @@ const WalletCard: React.FC<{
              onBack={() => setShowSendView(false)}
              onSend={handleSendToken}
            />
+        ) : showSwapView ? (
+          <SwapView
+            token={selectedToken}
+            wallet={wallet}
+            config={config}
+            onBack={() => setShowSwapView(false)}
+            onNotify={onNotify}
+          />
         ) : (
           <TokenDetailView 
             token={selectedToken} 
             onBack={handleBackToWallet}
             onCopyMint={onCopyTokenAddress}
             onSendClick={handleSendClick}
+            onSwapClick={handleSwapClick}
           />
         )
       ) : (
@@ -274,7 +380,7 @@ const WalletCard: React.FC<{
           onNameClick={handleNameClick}
           onNameChange={handleNameChange}
           onNameSave={handleNameSave}
-          onNameCancel={handleNameBlur}
+          onNameCancel={handleNameCancel}
           onKeyPress={handleKeyPress}
         />
       )}
@@ -291,6 +397,8 @@ const App: React.FC = () => {
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
   const [copiedType, setCopiedType] = useState<'wallet' | 'token'>('wallet');
   const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 
   const [loadingProgress, setLoadingProgress] = useState<LoadingProgress>({
@@ -308,12 +416,25 @@ const App: React.FC = () => {
     maxRetries: 3,
     confirmationTimeout: 60
   });
+  
+  // Отдельное состояние для редактирования конфига
+  const [editingConfig, setEditingConfig] = useState<Config>({
+    solanaRpcUrl: "",
+    solanaTokensRpcUrl: "",
+    autoRefreshInterval: 0,
+    delayBetweenRequests: 0,
+    priorityFee: 50000,
+    maxRetries: 3,
+    confirmationTimeout: 60
+  });
   const [showConfig, setShowConfig] = useState(false);
+  const [forceUpdate, setForceUpdate] = useState(0); // Ключ для принудительного обновления
 
   const loadConfig = async () => {
     try {
       const configData = await window.walletAPI.getConfig();
       setConfig(configData);
+      setEditingConfig(configData); // Инициализируем editing config
     } catch (error) {
       console.error('Error loading config:', error);
     }
@@ -329,6 +450,11 @@ const App: React.FC = () => {
     } catch (error) {
       console.error('Error saving config:', error);
     }
+  };
+
+  const handleConfigCancel = () => {
+    setEditingConfig(config); // Возвращаем к исходному состоянию
+    setShowConfig(false);
   };
 
   const loadWalletsAndBalances = async () => {
@@ -409,6 +535,17 @@ const App: React.FC = () => {
     }, 2000);
   }, []);
 
+  const showToast = useCallback((message: string) => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    setToastMessage(message);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastMessage(null);
+      toastTimeoutRef.current = null;
+    }, 3500);
+  }, []);
+
   const handleUpdateWalletName = useCallback(async (address: string, newName: string) => {
     try {
       await window.walletAPI.updateWalletName(address, newName);
@@ -460,11 +597,23 @@ const App: React.FC = () => {
     }
   }, [config.autoRefreshInterval, refreshing]);
 
+  // Вычисляем общий баланс всех кошельков
+  const totalBalance = React.useMemo(() => {
+    return Object.values(balances).reduce((total, walletBalance) => {
+      return total + (walletBalance.totalUsdValue || 0);
+    }, 0);
+  }, [balances]);
+
+
+
   // Очищаем таймер копирования при размонтировании компонента
   useEffect(() => {
     return () => {
       if (copyTimeoutRef.current) {
         clearTimeout(copyTimeoutRef.current);
+      }
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
       }
     };
   }, []);
@@ -482,10 +631,20 @@ const App: React.FC = () => {
     <div className="app">
       <div className="header">
         <h1>Solana Wallet Manager</h1>
+        <div className="header-balance">
+          <span className="total-balance-label">Total Balance:</span>
+          <span className="total-balance-value">{formatUsdValue(totalBalance)}</span>
+        </div>
         <div className="header-controls">
           <button 
             className="config-button"
-            onClick={() => setShowConfig(!showConfig)}
+            onClick={() => {
+              setShowConfig(!showConfig);
+              // При открытии конфига обновляем editing config
+              if (!showConfig) {
+                setEditingConfig(config);
+              }
+            }}
           >
             ⚙️ Config
           </button>
@@ -507,8 +666,8 @@ const App: React.FC = () => {
               <label>SOL RPC URL:</label>
               <input
                 type="text"
-                value={config.solanaRpcUrl}
-                onChange={(e) => setConfig({...config, solanaRpcUrl: e.target.value})}
+                value={editingConfig.solanaRpcUrl}
+                onChange={(e) => setEditingConfig({...editingConfig, solanaRpcUrl: e.target.value})}
                 placeholder="https://api.mainnet-beta.solana.com"
               />
             </div>
@@ -516,8 +675,8 @@ const App: React.FC = () => {
               <label>Tokens RPC URL:</label>
               <input
                 type="text"
-                value={config.solanaTokensRpcUrl}
-                onChange={(e) => setConfig({...config, solanaTokensRpcUrl: e.target.value})}
+                value={editingConfig.solanaTokensRpcUrl}
+                onChange={(e) => setEditingConfig({...editingConfig, solanaTokensRpcUrl: e.target.value})}
                 placeholder="https://api.mainnet-beta.solana.com"
               />
             </div>
@@ -525,24 +684,24 @@ const App: React.FC = () => {
               <label>Auto Refresh (ms):</label>
               <input
                 type="number"
-                value={config.autoRefreshInterval}
-                onChange={(e) => setConfig({...config, autoRefreshInterval: parseInt(e.target.value)})}
+                value={editingConfig.autoRefreshInterval}
+                onChange={(e) => setEditingConfig({...editingConfig, autoRefreshInterval: parseInt(e.target.value)})}
               />
             </div>
             <div className="config-item">
               <label>Delay Between Requests (ms):</label>
               <input
                 type="number"
-                value={config.delayBetweenRequests}
-                onChange={(e) => setConfig({...config, delayBetweenRequests: parseInt(e.target.value)})}
+                value={editingConfig.delayBetweenRequests}
+                onChange={(e) => setEditingConfig({...editingConfig, delayBetweenRequests: parseInt(e.target.value)})}
               />
             </div>
             <div className="config-item">
               <label>Priority Fee (micro-lamports):</label>
               <input
                 type="number"
-                value={config.priorityFee}
-                onChange={(e) => setConfig({...config, priorityFee: parseInt(e.target.value)})}
+                value={editingConfig.priorityFee}
+                onChange={(e) => setEditingConfig({...editingConfig, priorityFee: parseInt(e.target.value)})}
                 placeholder="50000"
               />
             </div>
@@ -550,8 +709,8 @@ const App: React.FC = () => {
               <label>Max Retries:</label>
               <input
                 type="number"
-                value={config.maxRetries}
-                onChange={(e) => setConfig({...config, maxRetries: parseInt(e.target.value)})}
+                value={editingConfig.maxRetries}
+                onChange={(e) => setEditingConfig({...editingConfig, maxRetries: parseInt(e.target.value)})}
                 placeholder="3"
               />
             </div>
@@ -559,22 +718,22 @@ const App: React.FC = () => {
               <label>Confirmation Timeout (seconds):</label>
               <input
                 type="number"
-                value={config.confirmationTimeout}
-                onChange={(e) => setConfig({...config, confirmationTimeout: parseInt(e.target.value)})}
+                value={editingConfig.confirmationTimeout}
+                onChange={(e) => setEditingConfig({...editingConfig, confirmationTimeout: parseInt(e.target.value)})}
                 placeholder="60"
               />
             </div>
             <div className="config-buttons">
-              <button onClick={() => saveConfig(config)}>Save</button>
-              <button onClick={() => setShowConfig(false)}>Cancel</button>
+              <button onClick={() => saveConfig(editingConfig)}>Save</button>
+              <button onClick={handleConfigCancel}>Cancel</button>
             </div>
           </div>
         </div>
       )}
 
-      {copiedAddress && (
+      {(toastMessage || copiedAddress) && (
         <div className="copy-notification">
-          {copiedType === 'wallet' ? 'Address copied!' : 'Token address copied!'}
+          {toastMessage ? toastMessage : (copiedType === 'wallet' ? 'Address copied!' : 'Token address copied!')}
         </div>
       )}
 
@@ -602,21 +761,23 @@ const App: React.FC = () => {
               return null;
             }
             
-                         return (
-               <WalletCard
-                 key={`wallet-${address}`}
-                 wallet={wallet}
-                 balance={walletBalance.solBalance}
-                 tokens={walletBalance.tokenBalances}
-                 totalUsdValue={walletBalance.totalUsdValue}
-                 solPrice={walletBalance.solPrice}
-                 availableWallets={wallets}
-                 config={config}
-                 onCopyAddress={handleCopyAddress}
-                 onCopyTokenAddress={handleCopyTokenAddress}
-                 onUpdateWalletName={handleUpdateWalletName}
-               />
-             );
+                                     return (
+              <WalletCard
+                key={`wallet-${address}-${forceUpdate}`}
+                wallet={wallet}
+                balance={walletBalance.solBalance}
+                tokens={walletBalance.tokenBalances}
+                totalUsdValue={walletBalance.totalUsdValue}
+                solPrice={walletBalance.solPrice}
+                availableWallets={wallets}
+                config={config}
+                onCopyAddress={handleCopyAddress}
+                onCopyTokenAddress={handleCopyTokenAddress}
+                onUpdateWalletName={handleUpdateWalletName}
+                onForceUpdate={() => setForceUpdate(prev => prev + 1)}
+                onNotify={showToast}
+              />
+            );
           })}
         </div>
       )}
@@ -632,5 +793,9 @@ import { createRoot } from 'react-dom/client';
 const container = document.getElementById('root');
 if (container) {
   const root = createRoot(container);
-  root.render(<App />);
+  root.render(
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
 } 

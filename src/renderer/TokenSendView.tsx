@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TokenBalance, WalletData, Config } from '../types';
 import { getWalletPublicKey } from '../loadWallets';
+import { formatUsdValue, formatAddress } from '../utils';
 
 interface TokenSendViewProps {
   token: TokenBalance;
@@ -29,48 +30,15 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
   const [step, setStep] = useState<'input' | 'confirm'>('input');
   const [isSending, setIsSending] = useState(false);
 
-  const handleMaxClick = () => {
+  const handleMaxClick = async () => {
     console.log('Max clicked for token:', token);
-    console.log('Token amount:', token.amount);
-    console.log('Token symbol:', token.symbol);
-    console.log('Exact balance:', exactBalance);
-    
     if (token.symbol === 'SOL') {
-      // Используем точный баланс из balances (в лампортах)
-      const balanceLamports = Math.floor(exactBalance * 1_000_000_000);
-      
-      // Базовая комиссия (5000 лампортов)
-      const baseFeeLamports = 5000;
-      // Приоритетная комиссия из конфига (в микролампортах, делим на 1_000_000)
-      console.log('Config priorityFee:', config.priorityFee);
-      const priorityFeeLamports = (config.priorityFee || 50000) / 1_000_000;
-      
-      // Общая комиссия в лампортах
-      const totalFeeLamports = baseFeeLamports + priorityFeeLamports;
-      
-      console.log('Balance in lamports:', balanceLamports);
-      console.log('Base fee in lamports:', baseFeeLamports);
-      console.log('Priority fee in lamports:', priorityFeeLamports);
-      console.log('Total fee in lamports:', totalFeeLamports);
-      
-      // Максимальная сумма для отправки (в лампортах)
-      const maxAmountLamports = Math.max(0, balanceLamports - totalFeeLamports);
-      
-      // Конвертируем обратно в SOL
-      const maxAmount = maxAmountLamports / 1_000_000_000;
-      console.log('Max amount in SOL:', maxAmount);
-      
-      setAmount(maxAmount.toFixed(6));
-    } else {
-      // Для SPL токенов комиссия оплачивается в SOL, а не в токенах
-      // Поэтому отправляем весь баланс токена
-      const decimals = token.decimals || 9;
-      const currentBalance = parseFloat(token.amount);
-      console.log('SPL token decimals:', decimals);
-      console.log('Setting amount to:', currentBalance.toFixed(decimals));
-      
-      setAmount(currentBalance.toFixed(decimals));
+      console.warn('Max for SOL is temporarily disabled while we rewrite the logic.');
+      return;
     }
+    const decimals = token.decimals || 9;
+    const currentBalance = parseFloat(token.amount);
+    setAmount(currentBalance.toFixed(decimals));
   };
 
   const handleNext = () => {
@@ -117,21 +85,7 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
     setShowWalletList(false);
   };
 
-  const formatAddress = (addr: string) => {
-    return addr.length > 8 ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : addr;
-  };
 
-  const formatUsdValue = (value: number) => {
-    if (value >= 1000000) {
-      return `$${(value / 1000000).toFixed(2)}M`;
-    } else if (value >= 1000) {
-      return `$${(value / 1000).toFixed(2)}K`;
-    } else if (value < 0.01) {
-      return `$${value.toFixed(4)}`;
-    } else {
-      return `$${value.toFixed(2)}`;
-    }
-  };
 
   const estimatedUsdValue = token.usdPrice && amount ? 
     parseFloat(amount) * token.usdPrice : 0;
@@ -252,7 +206,7 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
         <label className="input-label">Сумма</label>
         <div className="input-container">
           <input
-            type="number"
+            type="text"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0.0"
@@ -268,9 +222,11 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
             <span className="available-balance">
               Доступно {token.amount} {token.symbol}
             </span>
-            <button className="max-button-small" onClick={handleMaxClick}>
-              Max
-            </button>
+            {token.symbol !== 'SOL' && (
+              <button className="max-button-small" onClick={handleMaxClick}>
+                Max
+              </button>
+            )}
           </div>
         </div>
       </div>

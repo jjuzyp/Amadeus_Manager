@@ -6,9 +6,10 @@ interface TokenDetailViewProps {
   onBack: () => void;
   onCopyMint: (mint: string) => void;
   onSendClick: () => void;
+  onSwapClick?: () => void;
 }
 
-const TokenDetailView: React.FC<TokenDetailViewProps> = ({ token, onBack, onCopyMint, onSendClick }) => {
+const TokenDetailView: React.FC<TokenDetailViewProps> = ({ token, onBack, onCopyMint, onSendClick, onSwapClick }) => {
   const formatUsdValue = (value: number) => {
     if (value >= 1000000) {
       return `$${(value / 1000000).toFixed(2)}M`;
@@ -72,7 +73,8 @@ const TokenDetailView: React.FC<TokenDetailViewProps> = ({ token, onBack, onCopy
           <span className="button-icon">📤</span>
           <span className="button-text">Send</span>
         </button>
-        <button className="action-button swap-button">
+        <button className="action-button swap-button" onClick={onSwapClick}
+        >
           <span className="button-icon">🔄</span>
           <span className="button-text">Swap</span>
         </button>

@@ -5,6 +5,7 @@ import {
   TransactionMessage, 
   VersionedTransaction,
   LAMPORTS_PER_SOL,
+  SendTransactionError,
   ComputeBudgetProgram
 } from '@solana/web3.js';
 import { 
@@ -12,6 +13,7 @@ import {
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction
 } from '@solana/spl-token';
+import { calculateComputeUnits } from './utils';
 
 export interface SendTokenParams {
   rpcUrl: string; // RPC URL для транзакций
@@ -55,65 +57,92 @@ export const sendSOL = async (params: SendTokenParams): Promise<SendResult> => {
     };
   }
   
-  const amountLamports = Math.floor(parseFloat(amount) * LAMPORTS_PER_SOL);
-  
   // Получаем актуальный баланс с RPC прямо перед отправкой
   const balance = await transactionConnection.getBalance(fromWallet.publicKey);
   console.log('tokenSend.ts - Raw balance from RPC:', balance);
   console.log('tokenSend.ts - Balance in SOL:', balance / 1_000_000_000);
-  const baseFeeLamports = 5000; // Базовая комиссия в лампортах
-  console.log('tokenSend.ts - priorityFee from params:', priorityFee);
-  const priorityFeeLamports = (priorityFee || 50000) / 1_000_000; // Приоритетная комиссия в лампортах (делим на 1_000_000)
-  const totalFee = baseFeeLamports + priorityFeeLamports; // Базовая комиссия + приоритетная
   
-  console.log('Final balance check:');
-  console.log('Balance:', balance);
-  console.log('Amount lamports:', amountLamports);
-  console.log('Is sufficient:', balance >= amountLamports);
-  
-  if (balance < amountLamports) {
-    return {
-      success: false,
-      error: 'Недостаточно SOL для отправки'
-    };
-  }
+  // Используем более точный расчет для избежания потери точности
+  const requestedLamports = Math.round(parseFloat(amount) * LAMPORTS_PER_SOL);
 
-  // Создаем инструкцию для установки приоритетной комиссии
-  const priorityFeeIx = ComputeBudgetProgram.setComputeUnitPrice({
-    microLamports: priorityFee || 50000
-  });
+  // 1) Получаем blockhash ОДИН раз (для оценки комиссии)
+  const { blockhash, lastValidBlockHeight } = await transactionConnection.getLatestBlockhash('finalized');
 
-  // Создаем инструкцию для перевода SOL
-  const transferIx = SystemProgram.transfer({
+  // 2) Точно считаем комиссию для сообщения (базовая комиссия за подпись)
+  const draftTransferIx = SystemProgram.transfer({
     fromPubkey: fromWallet.publicKey,
     toPubkey: toPubkey,
-    lamports: amountLamports,
+    lamports: 0,
   });
+  const feeMessage = new TransactionMessage({
+    payerKey: fromWallet.publicKey,
+    recentBlockhash: blockhash,
+    instructions: [draftTransferIx]
+  }).compileToV0Message();
+  const feeForMessage = await transactionConnection.getFeeForMessage(feeMessage);
+  const feeLamports = feeForMessage.value ?? 5000;
+
+  // 3) Минимальный приоритет, чтобы валидатор скорее включал tx
+  const computeUnitLimit = 200_000;
+  const computeUnitPriceMicro = 1000; // 0.001 лампорта за CU
+  const priorityFeeLamports = Math.floor((computeUnitLimit * computeUnitPriceMicro) / 1_000_000); // ~200 лампортов
+
+  const maxSendable = Math.max(0, balance - feeLamports - priorityFeeLamports);
+  let amountLamports = Math.min(requestedLamports, maxSendable);
+
+  console.log('Fee estimation & limits:');
+  console.log('Requested lamports:', requestedLamports);
+  console.log('Estimated fee lamports:', feeLamports);
+  console.log('Priority fee lamports (computed):', priorityFeeLamports);
+  console.log('Max sendable lamports:', maxSendable);
+  console.log('Final amount lamports:', amountLamports);
+  if (amountLamports <= 0) {
+    return {
+      success: false,
+      error: `Недостаточно SOL: комиссии ~ ${(feeLamports + priorityFeeLamports) / 1_000_000_000} SOL`
+    };
+  }
 
   // Retry логика
   for (let attempt = 1; attempt <= (maxRetries || 3); attempt++) {
     try {
-      // Получаем последний blockhash
-      const { blockhash } = await transactionConnection.getLatestBlockhash('finalized');
+      // Получаем свежий blockhash на каждую попытку
+      const { blockhash, lastValidBlockHeight } = await transactionConnection.getLatestBlockhash('finalized');
 
-      // Создаем и подписываем транзакцию
+      // Создаем транзакцию: минимальный приоритет + перевод
+      const limitInstruction = ComputeBudgetProgram.setComputeUnitLimit({ units: computeUnitLimit });
+      const priceInstruction = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: computeUnitPriceMicro });
+      const transferInstruction = SystemProgram.transfer({
+        fromPubkey: fromWallet.publicKey,
+        toPubkey: toPubkey,
+        lamports: amountLamports,
+      });
       const messageV0 = new TransactionMessage({
         payerKey: fromWallet.publicKey,
         recentBlockhash: blockhash,
-        instructions: [priorityFeeIx, transferIx],
+        instructions: [limitInstruction, priceInstruction, transferInstruction],
       }).compileToV0Message();
-      
       const transaction = new VersionedTransaction(messageV0);
       transaction.sign([fromWallet]);
 
-      // Отправляем транзакцию
-      const txid = await transactionConnection.sendTransaction(transaction);
+      // Логи для инспектора в Solana Explorer
+      try {
+        const msgBase64 = Buffer.from(messageV0.serialize()).toString('base64');
+        const txBase64 = Buffer.from(transaction.serialize()).toString('base64');
+        console.log('Inspector message (base64):', msgBase64);
+        console.log('Inspector transaction (base64):', txBase64);
+        console.log('Open https://explorer.solana.com/tx/inspector and paste the base64 transaction above.');
+      } catch (e) {
+        console.log('Failed to produce base64 for inspector:', e);
+      }
+      const txid = await transactionConnection.sendTransaction(transaction, { skipPreflight: true });
       
       // Ждем подтверждения с увеличенным таймаутом
-      const confirmation = await transactionConnection.confirmTransaction(
-        txid, 
-        'confirmed'
-      );
+      const confirmation = await transactionConnection.confirmTransaction({
+        signature: txid,
+        blockhash,
+        lastValidBlockHeight
+      }, 'confirmed');
       
       if (confirmation.value.err) {
         if (attempt === maxRetries) {
@@ -132,6 +161,12 @@ export const sendSOL = async (params: SendTokenParams): Promise<SendResult> => {
       };
     } catch (error) {
       console.error(`Error sending SOL (attempt ${attempt}):`, error);
+      try {
+        if (error instanceof SendTransactionError) {
+          const logs = await error.getLogs(transactionConnection);
+          console.error('Simulation logs:', logs);
+        }
+      } catch {}
       if (attempt === maxRetries) {
         return {
           success: false,
@@ -163,9 +198,7 @@ export const sendSPLToken = async (params: SendTokenParams): Promise<SendResult>
     maxRetries 
   } = params;
   
-  // Создаем новое соединение без WebSocket для транзакций
-  const transactionConnection = new Connection(rpcUrl);
-
+  // Валидация параметров
   if (!tokenMint) {
     return {
       success: false,
@@ -180,6 +213,10 @@ export const sendSPLToken = async (params: SendTokenParams): Promise<SendResult>
     };
   }
 
+  // Создаем соединение
+  const connection = new Connection(rpcUrl);
+  
+  // Создаем PublicKey объекты
   const mintPubkey = new PublicKey(tokenMint);
   const toPubkey = new PublicKey(toAddress);
   
@@ -197,42 +234,85 @@ export const sendSPLToken = async (params: SendTokenParams): Promise<SendResult>
     toPubkey
   );
 
-  // Проверяем существование токен-аккаунта получателя
-  const toTokenAccountInfo = await transactionConnection.getAccountInfo(toTokenAccount);
+  // Создаем базовые инструкции для симуляции
+  const baseInstructions = [];
   
+  // Инструкция перевода токенов (всегда нужна)
+  const baseTransferIx = createTransferInstruction(
+    fromTokenAccount,
+    toTokenAccount,
+    fromWallet.publicKey,
+    amountRaw
+  );
+  baseInstructions.push(baseTransferIx);
+
+  // Получаем точное количество compute units через симуляцию
+  const baseComputeUnits = await calculateComputeUnits(
+    connection,
+    baseInstructions,
+    fromWallet,
+    priorityFee || 50000
+  );
+  
+  // Добавляем запас для ComputeBudgetProgram инструкций
+  const computeUnits = baseComputeUnits + 10000; // +10k для ComputeBudget инструкций
+
   // Retry логика
   for (let attempt = 1; attempt <= (maxRetries || 3); attempt++) {
     try {
       const instructions = [];
 
-      // Создаем инструкцию для установки приоритетной комиссии
+      // Добавляем инструкцию для установки compute units
+      const computeUnitsIx = ComputeBudgetProgram.setComputeUnitLimit({
+        units: computeUnits
+      });
+      instructions.push(computeUnitsIx);
+
+      // Добавляем приоритетную комиссию
       const priorityFeeIx = ComputeBudgetProgram.setComputeUnitPrice({
         microLamports: priorityFee || 50000
       });
       instructions.push(priorityFeeIx);
 
-      // Если токен-аккаунт получателя не существует, создаем его
+      // Проверяем существование токен-аккаунта отправителя
+      const fromTokenAccountInfo = await connection.getAccountInfo(fromTokenAccount);
+      
+      // Если у отправителя нет токен-аккаунта, создаем его
+      if (!fromTokenAccountInfo) {
+        const createFromAtaIx = createAssociatedTokenAccountInstruction(
+          fromWallet.publicKey,
+          fromTokenAccount,
+          fromWallet.publicKey,
+          mintPubkey
+        );
+        instructions.push(createFromAtaIx);
+      }
+
+      // Проверяем существование токен-аккаунта получателя
+      const toTokenAccountInfo = await connection.getAccountInfo(toTokenAccount);
+      
+      // Если у получателя нет токен-аккаунта, создаем его
       if (!toTokenAccountInfo) {
-        const createAtaIx = createAssociatedTokenAccountInstruction(
+        const createToAtaIx = createAssociatedTokenAccountInstruction(
           fromWallet.publicKey,
           toTokenAccount,
           toPubkey,
           mintPubkey
         );
-        instructions.push(createAtaIx);
+        instructions.push(createToAtaIx);
       }
 
-      // Создаем инструкцию перевода токенов
-      const transferIx = createTransferInstruction(
+      // Добавляем инструкцию перевода токенов
+      const finalTransferIx = createTransferInstruction(
         fromTokenAccount,
         toTokenAccount,
         fromWallet.publicKey,
         amountRaw
       );
-      instructions.push(transferIx);
+      instructions.push(finalTransferIx);
 
       // Получаем последний blockhash
-      const { blockhash } = await transactionConnection.getLatestBlockhash('finalized');
+      const { blockhash } = await connection.getLatestBlockhash('finalized');
 
       // Создаем и подписываем транзакцию
       const messageV0 = new TransactionMessage({
@@ -245,10 +325,10 @@ export const sendSPLToken = async (params: SendTokenParams): Promise<SendResult>
       transaction.sign([fromWallet]);
 
       // Отправляем транзакцию
-      const txid = await transactionConnection.sendTransaction(transaction);
+      const txid = await connection.sendTransaction(transaction);
       
       // Ждем подтверждения
-      const confirmation = await transactionConnection.confirmTransaction(txid, 'confirmed');
+      const confirmation = await connection.confirmTransaction(txid, 'confirmed');
       
       if (confirmation.value.err) {
         if (attempt === maxRetries) {
