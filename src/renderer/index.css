@@ -6,6 +6,12 @@ body {
   min-height: 100vh;
 }
 
+/* Jupiter Plugin theme variables (per docs) */
+:root {
+  /* Match cards/app background: #181a20 */
+  --jupiter-plugin-background: 24, 26, 32;
+}
+
 .app {
   padding: 20px;
   min-height: 100vh;
@@ -258,6 +264,67 @@ body {
   flex-direction: column;
 }
 
+/* Маленькие вкладки внизу карточки */
+.wallet-tabs {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+}
+
+.wallet-tab-button {
+  width: 40px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #23272f;
+  border: 1px solid #444;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+  z-index: 2;
+}
+
+.wallet-tab-button:hover:not(:disabled) {
+  background: #2d313a;
+  border-color: #007bff;
+}
+
+.wallet-tab-button.active,
+.wallet-tab-button:disabled {
+  opacity: 0.8;
+  cursor: default;
+  border-color: #555;
+}
+
+.wallet-tab-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.wallet-tab-icon-img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  display: block;
+  /* make icon visible on dark bg and hide white background */
+  mix-blend-mode: screen; /* black becomes transparent-ish, lights show */
+  border-radius: 4px;
+  pointer-events: none;
+  /* invert so bg becomes dark, then lighten strokes */
+  filter: invert(1) grayscale(1) brightness(1.25) contrast(1.1);
+}
+
+/* Unified Wallet Kit hidden button */
+.uwk-hidden {
+  display: none !important;
+}
+
 .wallet-total-value {
   position: absolute;
   top: 12px;
@@ -401,15 +468,200 @@ body {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 16px;
+  padding: 12px;
   overflow-y: auto;
+}
+
+/* Swap redesigned */
+.swap-view {
+  padding: 8px 12px 64px 12px; /* leave space for bottom tabs */
+  overflow: hidden; /* prevent plugin from overlapping bottom tabs */
+}
+
+.jupiter-plugin-container {
+
+  /* Ensure variables also apply in scope */
+  --jupiter-plugin-background: 24, 26, 32;
+  transform: translateY(-12px) scale(0.88);
+  transform-origin: top center;
+}   
+
+.jupiter-plugin-container > * { margin: 0 !important; }
+
+.swap-header {
+  display: flex;
+  align-items: center;
+}
+
+.swap-panel {
+  background: #1f242c;
+  border: 1px solid #333b45;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.swap-panel.dark {
+  background: #181c23;
+}
+
+.swap-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.token-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #0f1217;
+  border: 1px solid #2b3240;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.token-dot { color: #7aa2ff; font-size: 10px; }
+.token-symbol-text { font-weight: 700; font-size: 14px; }
+.token-caret { opacity: 0.7; }
+
+.amount-big {
+  flex: 1;
+  min-width: 0;
+  font-size: 22px;
+  text-align: right;
+  background: #0f1217;
+  border: 1px solid #2b3240;
+  border-radius: 8px;
+  color: #aab4c8;
+  padding: 10px 12px;
+}
+
+.amount-big.readonly { pointer-events: none; }
+
+.swap-subinfo {
+  display: flex;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #7f8797;
+}
+
+.swap-subinfo .spacer { flex: 1; }
+.swap-subinfo .label { opacity: 0.75; }
+.swap-subinfo .hint { opacity: 0.5; }
+
+.swap-center-toggle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #0f1217;
+  border: 1px solid #2b3240;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: -6px auto;
+  cursor: pointer;
+}
+
+.slippage-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slippage-input {
+  width: 90px;
+  background: #0f1217;
+  border: 1px solid #2b3240;
+  border-radius: 6px;
+  color: #fff;
+  padding: 6px 8px;
+}
+
+.swap-submit {
+  margin-left: auto;
+  background: #0d6efd;
+  border: none;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.token-selector-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.token-selector {
+  width: 420px;
+  max-height: 70vh;
+  background: #0f1217;
+  border: 1px solid #2b3240;
+  border-radius: 10px;
+  padding: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.token-search {
+  background: #0d1117;
+  border: 1px solid #2b3240;
+  border-radius: 8px;
+  color: #fff;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.token-popular {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.token-popular-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #131722;
+  border: 1px solid #2b3240;
+  color: #fff;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.token-popular-label { font-weight: 700; }
+.token-popular-mint { color: #7f8797; font-size: 12px; }
+
+.use-address {
+  margin-top: 8px;
+  background: #0d6efd;
+  border: none;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
 }
 
 .token-detail-header {
   display: flex;
   align-items: center;
-  margin-bottom: 20px;
+  justify-content: center;
+  margin-bottom: 12px;
   position: relative;
+  --token-header-height: 36px;
+  height: var(--token-header-height);
 }
 
 .back-button {
@@ -418,31 +670,48 @@ body {
   color: #fff;
   font-size: 24px;
   cursor: pointer;
-  padding: 8px 12px;
+  padding: 0;
   border-radius: 6px;
-  transition: all 0.2s;
+  transition: background 0.15s;
   margin-right: 0;
   font-weight: bold;
   line-height: 1;
   position: absolute;
-  left: -8px;
-  top: -8px;
+  left: 0px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .back-button:hover {
   background: #2d313a;
-  transform: scale(1.1);
+}
+
+.back-button-icon {
+  width: 16px;
+  height: 16px;
+  display: block;
+  object-fit: contain;
+  mix-blend-mode: screen; /* убираем белый фон на тёмной теме */
+  filter: invert(1) grayscale(1) brightness(1.25) contrast(1.1);
 }
 
 .token-detail-title {
   flex: 1;
   text-align: center;
   cursor: pointer;
-  padding: 8px 12px;
+  padding: 0 12px;
   border-radius: 6px;
   transition: background 0.2s;
-  margin-left: 40px;
-  margin-right: 40px;
+  margin-left: 56px; /* clip clickable area away from back button */
+  margin-right: 56px; /* keep symmetry for perfect centering */
+  z-index: 1;
+  line-height: var(--token-header-height);
 }
 
 .token-detail-title:hover {
@@ -458,36 +727,36 @@ body {
 
 .token-price-section {
   text-align: center;
-  margin-bottom: 24px;
-  padding: 20px;
+  margin-bottom: 12px;
+  padding: 12px;
   background: #23272f;
   border-radius: 8px;
   border: 1px solid #444;
 }
 
 .token-price {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: bold;
   color: #fff;
   margin-bottom: 8px;
 }
 
 .token-usd-value {
-  font-size: 16px;
+  font-size: 14px;
   color: #28a745;
   font-weight: bold;
 }
 
 .token-amount-section {
-  margin-bottom: 24px;
-  padding: 16px;
+  margin-bottom: 12px;
+  padding: 12px;
   background: #23272f;
   border-radius: 8px;
   border: 1px solid #444;
 }
 
 .token-amount-label {
-  font-size: 12px;
+  font-size: 11px;
   color: #888;
   margin-bottom: 8px;
   text-transform: uppercase;
@@ -495,15 +764,15 @@ body {
 }
 
 .token-amount-value {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: bold;
   color: #fff;
 }
 
 .token-action-buttons {
   display: flex;
-  gap: 12px;
-  margin-top: auto;
+  gap: 10px;
+  margin-top: 8px;
   flex-shrink: 0;
 }
 
@@ -513,14 +782,14 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 16px 12px;
+  padding: 12px 10px;
   background: #23272f;
   border: 1px solid #444;
   border-radius: 8px;
   color: #fff;
   cursor: pointer;
   transition: all 0.2s;
-  min-height: 80px;
+  min-height: 60px;
 }
 
 .action-button:hover {
@@ -529,8 +798,23 @@ body {
 }
 
 .button-icon {
-  font-size: 20px;
-  margin-bottom: 8px;
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.button-icon-img {
+  width: 22px;
+  height: 22px;
+  display: block;
+  object-fit: contain;
+  mix-blend-mode: screen;
+  filter: invert(1) grayscale(1) brightness(1.25) contrast(1.1);
+}
+
+/* Make the three dots in MORE match the light-gray icon tone */
+.more-button .button-icon {
+  color: #cfd3da;
+  opacity: 0.95;
 }
 
 .button-text {

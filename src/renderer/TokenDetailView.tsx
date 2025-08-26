@@ -6,10 +6,9 @@ interface TokenDetailViewProps {
   onBack: () => void;
   onCopyMint: (mint: string) => void;
   onSendClick: () => void;
-  onSwapClick?: () => void;
 }
 
-const TokenDetailView: React.FC<TokenDetailViewProps> = ({ token, onBack, onCopyMint, onSendClick, onSwapClick }) => {
+const TokenDetailView: React.FC<TokenDetailViewProps> = ({ token, onBack, onCopyMint, onSendClick }) => {
   const formatUsdValue = (value: number) => {
     if (value >= 1000000) {
       return `$${(value / 1000000).toFixed(2)}M`;
@@ -39,8 +38,12 @@ const TokenDetailView: React.FC<TokenDetailViewProps> = ({ token, onBack, onCopy
     <div className="token-detail-view">
       {/* Header with back button */}
       <div className="token-detail-header">
-        <button className="back-button" onClick={onBack}>
-          ‹
+        <button className="back-button" onClick={onBack} aria-label="Back">
+          <img
+            src="https://icons.veryicon.com/png/o/miscellaneous/medical-system-icon/return-button.png"
+            alt=""
+            className="back-button-icon"
+          />
         </button>
         <div className="token-detail-title" onClick={() => onCopyMint(token.mint)}>
           <h3>{token.symbol || token.mint.slice(0, 8) + '...'}</h3>
@@ -70,13 +73,14 @@ const TokenDetailView: React.FC<TokenDetailViewProps> = ({ token, onBack, onCopy
       {/* Action buttons */}
       <div className="token-action-buttons">
         <button className="action-button send-button" onClick={onSendClick}>
-          <span className="button-icon">📤</span>
+          <span className="button-icon">
+            <img
+              src="https://icones.pro/wp-content/uploads/2021/06/icone-fleche-droite-grise.png"
+              alt=""
+              className="button-icon-img"
+            />
+          </span>
           <span className="button-text">Send</span>
-        </button>
-        <button className="action-button swap-button" onClick={onSwapClick}
-        >
-          <span className="button-icon">🔄</span>
-          <span className="button-text">Swap</span>
         </button>
         <button className="action-button more-button">
           <span className="button-icon">⋯</span>

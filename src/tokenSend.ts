@@ -59,8 +59,6 @@ export const sendSOL = async (params: SendTokenParams): Promise<SendResult> => {
   
   // Получаем актуальный баланс с RPC прямо перед отправкой
   const balance = await transactionConnection.getBalance(fromWallet.publicKey);
-  console.log('tokenSend.ts - Raw balance from RPC:', balance);
-  console.log('tokenSend.ts - Balance in SOL:', balance / 1_000_000_000);
   
   // Используем более точный расчет для избежания потери точности
   const requestedLamports = Math.round(parseFloat(amount) * LAMPORTS_PER_SOL);
@@ -90,12 +88,7 @@ export const sendSOL = async (params: SendTokenParams): Promise<SendResult> => {
   const maxSendable = Math.max(0, balance - feeLamports - priorityFeeLamports);
   let amountLamports = Math.min(requestedLamports, maxSendable);
 
-  console.log('Fee estimation & limits:');
-  console.log('Requested lamports:', requestedLamports);
-  console.log('Estimated fee lamports:', feeLamports);
-  console.log('Priority fee lamports (computed):', priorityFeeLamports);
-  console.log('Max sendable lamports:', maxSendable);
-  console.log('Final amount lamports:', amountLamports);
+  // Debug fee info removed in production
   if (amountLamports <= 0) {
     return {
       success: false,
@@ -126,15 +119,7 @@ export const sendSOL = async (params: SendTokenParams): Promise<SendResult> => {
       transaction.sign([fromWallet]);
 
       // Логи для инспектора в Solana Explorer
-      try {
-        const msgBase64 = Buffer.from(messageV0.serialize()).toString('base64');
-        const txBase64 = Buffer.from(transaction.serialize()).toString('base64');
-        console.log('Inspector message (base64):', msgBase64);
-        console.log('Inspector transaction (base64):', txBase64);
-        console.log('Open https://explorer.solana.com/tx/inspector and paste the base64 transaction above.');
-      } catch (e) {
-        console.log('Failed to produce base64 for inspector:', e);
-      }
+      // Inspector logs omitted in production
       const txid = await transactionConnection.sendTransaction(transaction, { skipPreflight: true });
       
       // Ждем подтверждения с увеличенным таймаутом
@@ -151,7 +136,7 @@ export const sendSOL = async (params: SendTokenParams): Promise<SendResult> => {
             error: 'Транзакция не была подтверждена'
           };
         }
-        console.log(`Попытка ${attempt} не удалась, повторяем...`);
+        // retry silently
         continue;
       }
 

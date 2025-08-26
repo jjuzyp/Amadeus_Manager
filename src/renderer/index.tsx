@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, Component, ErrorInfo, ReactNode } from 'react';
+import { UnifiedWalletProvider, UnifiedWalletButton } from '@jup-ag/wallet-adapter';
 import { loadWallets, getWalletPublicKey, parseSecretKey } from '../loadWallets';
 import { processWalletBalances, LoadingProgress } from '../balances';
 import { WalletData, TokenBalance, Config, WalletBalances } from '../types';
@@ -195,7 +196,7 @@ const WalletCard: React.FC<{
   const [editName, setEditName] = useState(wallet.name);
   const [selectedToken, setSelectedToken] = useState<TokenBalance | null>(null);
   const [showSendView, setShowSendView] = useState(false);
-  const [showSwapView, setShowSwapView] = useState(false);
+  const [activeTab, setActiveTab] = useState<'wallet' | 'swap'>('wallet');
 
   const handleTokenClick = React.useCallback((token: TokenBalance) => {
     setSelectedToken(token);
@@ -204,19 +205,37 @@ const WalletCard: React.FC<{
   const handleBackToWallet = React.useCallback(() => {
     setSelectedToken(null);
     setShowSendView(false);
-    setShowSwapView(false);
     // Принудительно обновляем состояние редактирования
     setIsEditing(false);
     setEditName(wallet.name);
+    setActiveTab('wallet');
   }, [wallet.name]);
 
   const handleSendClick = React.useCallback(() => {
     setShowSendView(true);
   }, []);
 
-  const handleSwapClick = React.useCallback(() => {
-    setShowSwapView(true);
-  }, []);
+  // Переключение вкладок главного окна кошелька
+  const handleTabSwitch = React.useCallback((tab: 'wallet' | 'swap') => {
+    setActiveTab(tab);
+    try {
+      if (tab === 'swap') {
+        window.dispatchEvent(new CustomEvent('wallet-swap-activated', { detail: { address } }));
+      }
+    } catch {}
+  }, [address]);
+
+  // Если в другой карточке активировали swap, возвращаемся на "Домой"
+  React.useEffect(() => {
+    const onExternalSwap = (e: Event) => {
+      const ce = e as CustomEvent<{ address: string }>;
+      if (ce.detail && ce.detail.address !== address) {
+        setActiveTab('wallet');
+      }
+    };
+    window.addEventListener('wallet-swap-activated', onExternalSwap);
+    return () => window.removeEventListener('wallet-swap-activated', onExternalSwap);
+  }, [address]);
 
   const handleSendToken = React.useCallback(async (recipient: string, amount: string): Promise<void> => {
     if (!selectedToken) return;
@@ -255,7 +274,6 @@ const WalletCard: React.FC<{
       }
       
       if (result.success) {
-        console.log('Transaction successful:', result.txid);
         onNotify(`Транзакция успешно отправлена! TXID: ${result.txid}`);
       } else {
         console.error('Transaction failed:', result.error);
@@ -347,42 +365,75 @@ const WalletCard: React.FC<{
              onBack={() => setShowSendView(false)}
              onSend={handleSendToken}
            />
-        ) : showSwapView ? (
-          <SwapView
-            token={selectedToken}
-            wallet={wallet}
-            config={config}
-            onBack={() => setShowSwapView(false)}
-            onNotify={onNotify}
-          />
         ) : (
           <TokenDetailView 
             token={selectedToken} 
             onBack={handleBackToWallet}
             onCopyMint={onCopyTokenAddress}
             onSendClick={handleSendClick}
-            onSwapClick={handleSwapClick}
           />
         )
       ) : (
-        <WalletMainView
-          wallet={wallet}
-          balance={balance}
-          tokens={tokens}
-          totalUsdValue={totalUsdValue}
-          solPrice={solPrice}
-          address={address}
-          isEditing={isEditing}
-          editName={editName}
-          onCopyAddress={onCopyAddress}
-          onUpdateWalletName={onUpdateWalletName}
-          onTokenClick={handleTokenClick}
-          onNameClick={handleNameClick}
-          onNameChange={handleNameChange}
-          onNameSave={handleNameSave}
-          onNameCancel={handleNameCancel}
-          onKeyPress={handleKeyPress}
-        />
+        <>
+          {activeTab === 'wallet' ? (
+            <WalletMainView
+              wallet={wallet}
+              balance={balance}
+              tokens={tokens}
+              totalUsdValue={totalUsdValue}
+              solPrice={solPrice}
+              address={address}
+              isEditing={isEditing}
+              editName={editName}
+              onCopyAddress={onCopyAddress}
+              onUpdateWalletName={onUpdateWalletName}
+              onTokenClick={handleTokenClick}
+              onNameClick={handleNameClick}
+              onNameChange={handleNameChange}
+              onNameSave={handleNameSave}
+              onNameCancel={handleNameCancel}
+              onKeyPress={handleKeyPress}
+            />
+          ) : (
+            <SwapView
+              wallet={wallet}
+              config={config}
+              onBack={() => setActiveTab('wallet')}
+              onNotify={onNotify}
+            />
+          )}
+
+          <div className="wallet-tabs">
+            <button
+              className={`wallet-tab-button ${activeTab === 'wallet' ? 'active' : ''}`}
+              onClick={() => handleTabSwitch('wallet')}
+              disabled={activeTab === 'wallet'}
+              aria-label="Wallet"
+            >
+              <span className="wallet-tab-icon">
+                <img
+                  src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTm73CNKFp_C5yCfxlPT3x11mw7_hJmxo3u4A&s"
+                  alt="Home"
+                  className="wallet-tab-icon-img"
+                />
+              </span>
+            </button>
+            <button
+              className={`wallet-tab-button ${activeTab === 'swap' ? 'active' : ''}`}
+              onClick={() => handleTabSwitch('swap')}
+              disabled={activeTab === 'swap'}
+              aria-label="Swap"
+            >
+              <span className="wallet-tab-icon">
+                <img
+                  src="https://png.pngtree.com/png-vector/20190420/ourmid/pngtree-vector-double-arrow-icon-png-image_966553.jpg"
+                  alt="Swap"
+                  className="wallet-tab-icon-img"
+                />
+              </span>
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
@@ -519,15 +570,44 @@ const App: React.FC = () => {
     }, 2000);
   }, []);
 
-  const handleCopyTokenAddress = useCallback((mint: string) => {
+  const handleCopyTokenAddress = useCallback(async (mint: string) => {
     // Очищаем предыдущий таймер если он существует
     if (copyTimeoutRef.current) {
       clearTimeout(copyTimeoutRef.current);
     }
-    
+
+    // Пытаемся скопировать адрес токена в буфер обмена
+    try {
+      if (document.hasFocus() && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(mint);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = mint;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+    } catch (error) {
+      console.error('Error copying token mint to clipboard:', error);
+      // Fallback: используем старый API
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = mint;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      } catch (fallbackError) {
+        console.error('Fallback copy for token also failed:', fallbackError);
+        // В крайнем случае показываем адрес
+        alert(`Token mint: ${mint}`);
+      }
+    }
+
     setCopiedAddress(mint);
     setCopiedType('token');
-    
+
     // Сохраняем ID нового таймера
     copyTimeoutRef.current = setTimeout(() => {
       setCopiedAddress(null);
@@ -618,6 +698,8 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // Using provider only for compatibility; adapters list omitted
+
   if (loading && !hasLoadedWallets) {
     return (
       <div className="loading">
@@ -628,6 +710,7 @@ const App: React.FC = () => {
   }
 
   return (
+    <UnifiedWalletProvider wallets={[]} config={{ autoConnect: false, env: 'mainnet-beta', metadata: { name: 'WalletManager', description: 'WalletManager', url: 'https://jup.ag', iconUrls: ['https://jup.ag/favicon.ico'] } }}>
     <div className="app">
       <div className="header">
         <h1>Solana Wallet Manager</h1>
@@ -636,6 +719,7 @@ const App: React.FC = () => {
           <span className="total-balance-value">{formatUsdValue(totalBalance)}</span>
         </div>
         <div className="header-controls">
+          <UnifiedWalletButton buttonClassName="uwk-hidden" />
           <button 
             className="config-button"
             onClick={() => {
@@ -782,6 +866,7 @@ const App: React.FC = () => {
         </div>
       )}
     </div>
+    </UnifiedWalletProvider>
   );
 };
 

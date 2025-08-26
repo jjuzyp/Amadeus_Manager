@@ -31,9 +31,8 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
   const [isSending, setIsSending] = useState(false);
 
   const handleMaxClick = async () => {
-    console.log('Max clicked for token:', token);
     if (token.symbol === 'SOL') {
-      console.warn('Max for SOL is temporarily disabled while we rewrite the logic.');
+      // Max for SOL temporarily disabled while we rewrite the logic
       return;
     }
     const decimals = token.decimals || 9;
@@ -49,9 +48,7 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
 
   const handleConfirm = async () => {
     if (recipient.trim() && amount.trim() && parseFloat(amount) > 0) {
-      console.log('Sending to address:', recipient.trim());
-      console.log('Address length:', recipient.trim().length);
-      console.log('Amount:', amount);
+      // sending info logged by parent toast
       setIsSending(true);
       try {
         await onSend(recipient.trim(), amount);
@@ -77,10 +74,6 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
 
   const selectWallet = (wallet: WalletData) => {
     const walletAddress = getWalletAddress(wallet);
-    console.log('Selected wallet:', wallet);
-    console.log('Wallet address:', walletAddress);
-    console.log('Address length:', walletAddress.length);
-    console.log('Is valid address:', walletAddress.length === 44);
     setRecipient(walletAddress);
     setShowWalletList(false);
   };

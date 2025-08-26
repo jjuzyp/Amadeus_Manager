@@ -1,183 +1,84 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { WalletData, TokenBalance, Config } from '../types';
-import { parseSecretKey, getWalletPublicKey } from '../loadWallets';
-import { Keypair } from '@solana/web3.js';
-import { executeSwap, getQuote, toRawAmount, QuoteResponseV6, getMintDecimals, formatTokenAmountFromRaw } from '../swap';
+import { getWalletPublicKey, parseSecretKey } from '../loadWallets';
+import { mountJupiterPlugin } from '../swap';
+import { Connection, Keypair, VersionedTransaction, PublicKey, Transaction } from '@solana/web3.js';
 
 interface SwapViewProps {
-  token: TokenBalance;
+  token?: TokenBalance; // Необязательный токен: по умолчанию пользователь вводит всё сам
   wallet: WalletData;
   config: Config;
   onBack: () => void;
   onNotify: (msg: string) => void;
 }
 
-const SwapView: React.FC<SwapViewProps> = ({ token, wallet, config, onBack, onNotify }) => {
-  const [amountUi, setAmountUi] = useState('');
-  const [outputMint, setOutputMint] = useState('');
-  const [slippageBps, setSlippageBps] = useState(50);
-  const [isQuoting, setIsQuoting] = useState(false);
-  const [isSwapping, setIsSwapping] = useState(false);
-  const [quote, setQuote] = useState<QuoteResponseV6 | null>(null);
-  const [outDecimals, setOutDecimals] = useState<number | null>(null);
-  const [isProgressVisible, setIsProgressVisible] = useState(false);
+const SwapView: React.FC<SwapViewProps> = ({ token, wallet, config }) => {
+  const containerId = useMemo(() => `jupiter-plugin-${getWalletPublicKey(wallet)}`, [wallet]);
 
-  const inputMint = token.mint;
-  const inputDecimals = token.decimals || 9;
+  useEffect(() => {
+    const init = async () => {
+      // Готовим адаптер на основе карточки (для пасс-тру по запросу)
+      const rpc = config.solanaTokensRpcUrl || config.solanaRpcUrl;
+      const connection = new Connection(rpc);
+      const secret = parseSecretKey(wallet.secretKey);
+      const kp = Keypair.fromSecretKey(secret);
+      const pubkey = new PublicKey(kp.publicKey);
 
-  const canQuote = useMemo(() => {
-    return !!outputMint && !!amountUi && parseFloat(amountUi) > 0;
-  }, [outputMint, amountUi]);
+      const robustSign = (t: any) => {
+        if (t && typeof t.sign === 'function') {
+          try { t.sign([kp]); return t; } catch {}
+          try { t.sign(kp); return t; } catch {}
+          if (typeof t.partialSign === 'function') { t.partialSign(kp); return t; }
+        }
+        if (t instanceof VersionedTransaction) { t.sign([kp]); return t; }
+        if (t instanceof Transaction) { t.sign(kp); return t; }
+        throw new Error('Unsupported transaction type');
+      };
 
-  const handleQuote = async () => {
-    if (!canQuote) return;
-    setIsQuoting(true);
-    try {
-      const amountRaw = toRawAmount(amountUi, inputDecimals);
-      const q = await getQuote({ inputMint, outputMint, amountRaw, slippageBps });
-      setQuote(q);
-      // Подгружаем decimals для output токена автоматически
-      try {
-        const rpc = config.solanaTokensRpcUrl || config.solanaRpcUrl;
-        const decimals = await getMintDecimals(new (await import('@solana/web3.js')).Connection(rpc), outputMint);
-        setOutDecimals(decimals);
-      } catch {}
-    } catch (e) {
-      onNotify(`Quote error: ${e instanceof Error ? e.message : 'Unknown error'}`);
-      setQuote(null);
-    } finally {
-      setIsQuoting(false);
-    }
-  };
+      const walletAdapter: any = {
+        name: 'CardWallet',
+        icon: '',
+        publicKey: pubkey,
+        connected: true,
+        connecting: false,
+        supportedTransactionVersions: new Set([0]) as any,
+        signTransaction: async (tx: any) => {
+          return robustSign(tx);
+        },
+        signAllTransactions: async (txs: any[]) => {
+          txs.forEach((t) => { robustSign(t); });
+          return txs;
+        },
+        sendTransaction: async (tx: any, conn: Connection) => {
+          const signed = robustSign(tx);
+          return await conn.sendRawTransaction(signed.serialize(), { skipPreflight: true });
+        },
+        signAndSendTransaction: async (tx: any, opts: { connection: Connection }) => {
+          const sig = await (walletAdapter as any).sendTransaction(tx, opts.connection);
+          return { signature: sig } as any;
+        },
+        disconnect: async () => {}
+      };
 
-  const handleSwap = async () => {
-    if (!quote) return;
-    setIsSwapping(true);
-    setIsProgressVisible(true);
-    try {
-      const kp = Keypair.fromSecretKey(parseSecretKey(wallet.secretKey));
-      const res = await executeSwap({ rpcUrl: config.solanaTokensRpcUrl || config.solanaRpcUrl, userKeypair: kp, quote });
-      if (res.success) {
-        onNotify(`Swap successful! TXID: ${res.txid}`);
-        onBack();
-      } else {
-        onNotify(`Swap failed: ${res.error}`);
-      }
-    } catch (e) {
-      onNotify(`Swap error: ${e instanceof Error ? e.message : 'Unknown error'}`);
-    } finally {
-      setIsSwapping(false);
-      setTimeout(() => setIsProgressVisible(false), 400);
-    }
-  };
+      // Инициализируем плагин; при клике Connect Wallet плагин вызовет onRequestConnectWallet,
+      // где мы синхронизируем контекст через syncProps тем же адаптером
+      mountJupiterPlugin(containerId, {
+        initialInputMint: token?.mint,
+        initialAmount: undefined,
+        initialOutputMint: undefined,
+        wallet: walletAdapter,
+        connection
+      });
+    };
 
-  // Популярные токены для выпадающего списка
-  const popularTokens: { label: string; mint: string }[] = [
-    { label: 'USDC', mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' },
-    { label: 'USDT', mint: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB' },
-    { label: 'SOL (wSOL)', mint: 'So11111111111111111111111111111111111111112' },
-    { label: 'BONK', mint: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263' },
-    { label: 'JitoSOL', mint: 'J1toXLrJ9Qn2cV4VyHA6BvJY7agufkUZ8Z8D3jCxh6C' }
-  ];
+    init();
+  }, [containerId, token?.mint, config.solanaTokensRpcUrl, config.solanaRpcUrl, wallet.secretKey]);
 
   return (
-    <div className="token-detail-view">
-      <div className="token-detail-header">
-        <button className="back-button" onClick={onBack}>‹</button>
-        <div className="token-detail-title">
-          <h3>Swap</h3>
-        </div>
-      </div>
-
-      <div className="token-amount-section">
-        <div className="token-amount-label">Вы заплатите</div>
-        <div className="input-section">
-          <div className="input-container">
-            <input
-              className="amount-input"
-              type="text"
-              value={amountUi}
-              onChange={(e) => setAmountUi(e.target.value)}
-              placeholder="0"
-            />
-            <span className="token-symbol">{token.symbol || 'TOKEN'}</span>
-          </div>
-          <div className="amount-info">
-            <span className="available-balance">Доступно {token.amount} {token.symbol}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="token-amount-section">
-        <div className="token-amount-label">Вы получите</div>
-        <div className="input-section">
-          <div className="input-container">
-            <input
-              className="recipient-input"
-              type="text"
-              value={outputMint}
-              onChange={(e) => setOutputMint(e.target.value)}
-              placeholder="Token mint адрес контракта"
-            />
-            <select
-              className="wallet-select-button"
-              value={''}
-              onChange={(e) => {
-                if (e.target.value) setOutputMint(e.target.value);
-                e.currentTarget.value = '';
-              }}
-            >
-              <option value="">Популярные</option>
-              {popularTokens.map((t) => (
-                <option key={t.mint} value={t.mint}>{t.label}</option>
-              ))}
-            </select>
-          </div>
-          {quote && (
-            <div className="amount-info">
-              <span className="usd-value">
-                ~{outDecimals != null ? formatTokenAmountFromRaw(quote.outAmount, outDecimals) : quote.outAmount}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="token-amount-section">
-        <div className="token-amount-label">Слиппедж (bps)</div>
-        <div className="input-section">
-          <div className="input-container">
-            <input
-              className="amount-input"
-              type="number"
-              value={slippageBps}
-              onChange={(e) => setSlippageBps(parseInt(e.target.value) || 0)}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="token-action-buttons">
-        <button className="action-button more-button" onClick={handleQuote} disabled={!canQuote || isQuoting}>
-          <span className="button-icon">🔎</span>
-          <span className="button-text">Quote</span>
-        </button>
-        <button className="action-button send-button" onClick={handleSwap} disabled={!quote || isSwapping}>
-          <span className="button-icon">🔄</span>
-          <span className="button-text">Swap</span>
-        </button>
-      </div>
-
-      {isProgressVisible && (
-        <div className="swap-progress-pill">
-          <div className="loading-spinner"></div>
-          <span>Обмен {token.symbol || 'TOKEN'} → {(quote && outDecimals != null) ? '' : ''}...</span>
-        </div>
-      )}
+    <div className="swap-view">
+      <div id={containerId} className="jupiter-plugin-container"></div>
     </div>
   );
 };
 
 export default SwapView;
-
-

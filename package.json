@@ -24,6 +24,7 @@
     "webpack-cli": "^6.0.1"
   },
   "dependencies": {
+    "@jup-ag/wallet-adapter": "^0.2.3",
     "@solana/spl-token": "^0.4.13",
     "@solana/spl-token-metadata": "^0.1.6",
     "@solana/web3.js": "^1.98.4",

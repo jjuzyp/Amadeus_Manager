@@ -1,125 +1,183 @@
-import { Connection, PublicKey, VersionedTransaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { getMint } from '@solana/spl-token';
+// ==============================
+// Jupiter Plugin integration
+// ==============================
 
-export interface QuoteParams {
-  inputMint: string;
-  outputMint: string;
-  amountRaw: string; // amount in smallest units of input mint
-  slippageBps?: number; // default 50 (0.5%)
-  onlyDirectRoutes?: boolean;
-}
+type JupiterInit = {
+  displayMode: 'modal' | 'integrated' | 'widget';
+  integratedTargetId?: string;
+  containerClassName?: string;
+  defaultExplorer?: 'Solana Explorer' | 'Solscan' | 'Solana Beach' | 'SolanaFM';
+  enableWalletPassthrough?: boolean;
+  localStoragePrefix?: string;
+  passthroughWalletContextState?: any;
+  context?: any;
+  onRequestConnectWallet?: () => void | Promise<void>;
+  formProps?: {
+    swapMode?: 'ExactInOrOut' | 'ExactIn' | 'ExactOut';
+    initialAmount?: string;
+    initialInputMint?: string;
+    initialOutputMint?: string;
+    fixedAmount?: boolean;
+    fixedMint?: string;
+    referralAccount?: string;
+    referralFee?: number;
+  };
+  onSuccess?: (args: any) => void;
+  onSwapError?: (args: any) => void;
+  onFormUpdate?: (form: any) => void;
+};
 
-export interface QuoteResponseV6 {
-  inputMint: string;
-  inAmount: string;
-  outputMint: string;
-  outAmount: string;
-  otherAmountThreshold: string;
-  slippageBps: number;
-  priceImpactPct: number;
-  routePlan: any[];
-  contextSlot: number;
-}
-
-export interface SwapParams {
-  rpcUrl: string;
-  userKeypair: any; // Keypair
-  quote: QuoteResponseV6;
-  wrapAndUnwrapSol?: boolean;
-}
-
-export interface SwapResult {
-  success: boolean;
-  txid?: string;
-  error?: string;
-}
-
-const JUP_QUOTE_URL = 'https://quote-api.jup.ag/v6/quote';
-const JUP_SWAP_URL = 'https://quote-api.jup.ag/v6/swap';
-
-export async function getQuote(params: QuoteParams): Promise<QuoteResponseV6> {
-  const { inputMint, outputMint, amountRaw, slippageBps = 50, onlyDirectRoutes = false } = params;
-  const url = new URL(JUP_QUOTE_URL);
-  url.searchParams.set('inputMint', inputMint);
-  url.searchParams.set('outputMint', outputMint);
-  url.searchParams.set('amount', amountRaw);
-  url.searchParams.set('slippageBps', String(slippageBps));
-  url.searchParams.set('onlyDirectRoutes', String(onlyDirectRoutes));
-
-  const res = await fetch(url.toString());
-  if (!res.ok) {
-    throw new Error(`Quote request failed: ${res.status} ${res.statusText}`);
+declare global {
+  interface Window {
+    Jupiter?: {
+      init: (props: JupiterInit) => void;
+      close: () => void;
+      resume: () => void;
+      syncProps?: (props: any) => void;
+    };
   }
-  const data = await res.json();
-  // Jupiter may return array or object depending on endpoint; ensure we pick best route
-  const route = Array.isArray(data) ? data[0] : data;
-  if (!route || !route.inAmount || !route.outAmount) {
-    throw new Error('No valid route returned from Jupiter');
-  }
-  return route as QuoteResponseV6;
 }
 
-export async function executeSwap(params: SwapParams): Promise<SwapResult> {
-  const { rpcUrl, userKeypair, quote, wrapAndUnwrapSol = true } = params;
-  try {
-    const connection = new Connection(rpcUrl);
-    const userPublicKey = userKeypair.publicKey.toBase58();
+// Jupiter v1 фактически синглтон. Отслеживаем активную цель и явно
+// закрываем предыдущий инстанс перед инициализацией нового, чтобы
+// избежать конфликтов и «серых» пустых окон.
+let activeTargetId: string | null = null;
 
-    const swapRes = await fetch(JUP_SWAP_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        quoteResponse: quote,
-        userPublicKey,
-        wrapAndUnwrapSol,
-        asLegacyTransaction: false
-      })
+async function ensureJupiterScriptLoaded(): Promise<void> {
+  if (typeof window !== 'undefined' && window.Jupiter) return;
+  const existing = document.querySelector('script[src^="https://plugin.jup.ag/plugin-v1.js"]') as HTMLScriptElement | null;
+  if (existing) {
+    await new Promise<void>((resolve) => {
+      if ((window as any).Jupiter) return resolve();
+      existing.addEventListener('load', () => resolve());
+      existing.addEventListener('error', () => resolve());
     });
-    if (!swapRes.ok) {
-      const text = await swapRes.text();
-      throw new Error(`Swap request failed: ${swapRes.status} ${swapRes.statusText} - ${text}`);
-    }
-    const swapJson = await swapRes.json();
-    const swapTxBase64 = swapJson.swapTransaction as string;
-    if (!swapTxBase64) {
-      throw new Error('No swapTransaction received from Jupiter');
-    }
-    const swapTxBuffer = Buffer.from(swapTxBase64, 'base64');
-    const transaction = VersionedTransaction.deserialize(swapTxBuffer);
-    transaction.sign([userKeypair]);
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    const s = document.createElement('script');
+    s.src = 'https://plugin.jup.ag/plugin-v1.js';
+    s.defer = true;
+    s.onload = () => resolve();
+    s.onerror = () => resolve();
+    document.head.appendChild(s);
+  });
+}
 
-    const txid = await connection.sendTransaction(transaction, { skipPreflight: true });
-    const conf = await connection.confirmTransaction(txid, 'confirmed');
-    if (conf.value.err) {
-      return { success: false, error: 'Транзакция свопа не подтверждена' };
+export interface MountPluginOptions {
+  initialInputMint?: string;
+  initialOutputMint?: string;
+  initialAmount?: string; // UI units
+  // Wallet passthrough context
+  wallet?: {
+    publicKey: any;
+    signTransaction: (tx: any) => Promise<any>;
+    signAllTransactions?: (txs: any[]) => Promise<any[]>;
+    connected?: boolean;
+    connecting?: boolean;
+    sendTransaction?: (tx: any, conn: any) => Promise<string>;
+    signAndSendTransaction?: (tx: any, opts: { connection: any }) => Promise<any>;
+    disconnect?: () => Promise<void> | void;
+  };
+  connection?: any;
+}
+
+export async function mountJupiterPlugin(targetElementId: string, opts: MountPluginOptions = {}): Promise<void> {
+  await ensureJupiterScriptLoaded();
+  if (!window.Jupiter) {
+    console.error('[JupiterPlugin] Failed to load window.Jupiter');
+    return;
+  }
+  // Закрываем предыдущий инстанс, если он был запущен в другой карточке
+  try {
+    if (activeTargetId && activeTargetId !== targetElementId) {
+      window.Jupiter?.close?.();
+      const prev = document.getElementById(activeTargetId);
+      if (prev) prev.innerHTML = '';
     }
-    return { success: true, txid };
   } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Swap error' };
+    console.error('[JupiterPlugin] failed to close previous instance', e);
+  }
+  // reduce noise: keep only errors
+  const buildPassthroughContext = () => {
+    if (!(opts.wallet && opts.connection)) return undefined;
+    const wallet = opts.wallet;
+    const contextState: any = {
+      connection: opts.connection,
+      publicKey: wallet.publicKey,
+      connected: wallet.connected ?? true,
+      connecting: wallet.connecting ?? false,
+      signTransaction: wallet.signTransaction,
+      signAllTransactions: wallet.signAllTransactions,
+      sendTransaction: wallet.sendTransaction,
+      signAndSendTransaction: wallet.signAndSendTransaction,
+      disconnect: wallet.disconnect,
+      wallet: {
+        adapter: {
+          name: (wallet as any).name || 'CardWallet',
+          icon: (wallet as any).icon || '',
+          publicKey: wallet.publicKey,
+          connected: wallet.connected ?? true,
+          connecting: wallet.connecting ?? false,
+          supportedTransactionVersions: (wallet as any).supportedTransactionVersions,
+          signTransaction: wallet.signTransaction,
+          signAllTransactions: wallet.signAllTransactions,
+          sendTransaction: wallet.sendTransaction,
+          signAndSendTransaction: wallet.signAndSendTransaction,
+          disconnect: wallet.disconnect
+        }
+      }
+    };
+    return contextState;
+  };
+  window.Jupiter.init({
+    displayMode: 'integrated',
+    integratedTargetId: targetElementId,
+    defaultExplorer: 'Solscan',
+    containerClassName: 'jupiter-plugin-container',
+    enableWalletPassthrough: !!(opts.wallet && opts.connection),
+    localStoragePrefix: targetElementId,
+    // Provide context up-front so each instance keeps its own wallet
+    passthroughWalletContextState: buildPassthroughContext(),
+    onRequestConnectWallet: async () => {
+      try {
+        if (!window.Jupiter?.syncProps) return;
+        const contextState = buildPassthroughContext();
+        if (!contextState) return;
+        window.Jupiter.syncProps({ passthroughWalletContextState: contextState });
+      } catch (e) {
+        console.error('[JupiterPlugin] onRequestConnectWallet failed', e);
+      }
+    },
+    formProps: {
+      swapMode: 'ExactInOrOut',
+      initialAmount: opts.initialAmount,
+      initialInputMint: opts.initialInputMint,
+      initialOutputMint: opts.initialOutputMint
+    },
+    onFormUpdate: () => {},
+    onSuccess: () => {},
+    onSwapError: ({ error, quoteResponseMeta }) => {
+      // Печатаем ошибки подробнее, чтобы диагностировать "e is not iterable"
+      try {
+        const details = error && typeof error === 'object' && 'message' in (error as any)
+          ? (error as any).message
+          : (error && typeof error === 'object' ? JSON.stringify(error) : String(error));
+        console.error('[JupiterPlugin][swapError] details:', details);
+      } catch {}
+      console.error('[JupiterPlugin][swapError]', error, quoteResponseMeta);
+    }
+  });
+
+  // Avoid global sync after init; context is already provided via init options
+  activeTargetId = targetElementId;
+}
+
+export function unmountJupiterPlugin(): void {
+  try {
+    window.Jupiter?.close?.();
+  } finally {
+    activeTargetId = null;
   }
 }
-
-export function toRawAmount(amountUi: string, decimals: number): string {
-  const n = parseFloat(amountUi || '0');
-  if (!isFinite(n) || n <= 0) return '0';
-  return Math.floor(n * Math.pow(10, decimals)).toString();
-}
-
-export async function getMintDecimals(connection: Connection, mintAddress: string): Promise<number> {
-  const mint = await getMint(connection, new PublicKey(mintAddress));
-  return mint.decimals;
-}
-
-export function formatTokenAmountFromRaw(raw: string, decimals: number): string {
-  const bn = Number(raw);
-  if (!isFinite(bn)) return '0';
-  const value = bn / Math.pow(10, decimals);
-  if (value === 0) return '0';
-  if (value < 0.01) return '<0.01';
-  if (value < 1) return value.toFixed(6);
-  if (value < 100) return value.toFixed(4);
-  if (value < 10000) return value.toFixed(3);
-  return value.toFixed(2);
-}
-
 

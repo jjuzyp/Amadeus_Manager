@@ -1,4 +1,4 @@
-import { Connection, PublicKey, ComputeBudgetProgram, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
+import { Connection, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
 
 // Общая функция для расчета compute units через симуляцию
 export const calculateComputeUnits = async (
@@ -23,8 +23,6 @@ export const calculateComputeUnits = async (
     // Симулируем транзакцию для получения compute units
     const simulation = await connection.simulateTransaction(tempTransaction);
     const computeUnits = simulation.value.unitsConsumed || 200000;
-    
-    console.log('Simulated compute units:', computeUnits);
     return computeUnits;
   } catch (error) {
     console.error('Error simulating transaction for compute units:', error);

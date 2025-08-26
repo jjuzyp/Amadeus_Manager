@@ -28,7 +28,7 @@ export function clearTokenSymbolCache() {
 
 // Функция для условного логирования (только в dev режиме)
 const isDev = process.env.NODE_ENV === 'development';
-const devLog = (...args: any[]) => isDev && console.log(...args);
+const devLog = (..._args: any[]) => {/* noop in production; keep hook for local debugging */};
 
 // Функция для получения полной информации о токене через Jupiter API V2
 async function getTokenInfoFromJupiterV2(mint: string): Promise<JupiterToken | null> {
@@ -39,7 +39,7 @@ async function getTokenInfoFromJupiterV2(mint: string): Promise<JupiterToken | n
     if (tokens && tokens.length > 0) {
       const token = tokens.find((t: any) => t.id === mint);
       if (token) {
-        devLog(`Получена информация о токене из Jupiter V2 для ${mint}: ${token.symbol}`);
+        devLog(`token ${mint}: ${token.symbol}`);
         return token;
       }
     }
@@ -95,16 +95,13 @@ export interface LoadingProgress {
 export async function getSolBalance(publicKey: string): Promise<number> {
   try {
     const config = await window.walletAPI.getConfig();
-    console.log('Используем RPC URL для SOL баланса:', config.solanaRpcUrl);
+    
     const connection = new Connection(config.solanaRpcUrl);
     
     // Увеличиваем задержку для rate limiting
     await delay(config.delayBetweenRequests);
-    console.log('Запрашиваем SOL баланс для:', publicKey);
     const balanceLamports = await connection.getBalance(new PublicKey(publicKey));
-    console.log('Получен баланс в лампортах:', balanceLamports);
     const solBalance = balanceLamports / 1e9;
-    console.log('Баланс в SOL:', solBalance);
     return solBalance;
   } catch (error) {
     console.error('Ошибка получения SOL баланса для', publicKey, ':', error);
@@ -115,10 +112,9 @@ export async function getSolBalance(publicKey: string): Promise<number> {
 export async function getTokenBalances(publicKey: string): Promise<TokenBalance[]> {
   try {
     const config = await window.walletAPI.getConfig();
-    console.log('Используем RPC URL для токенов:', config.solanaTokensRpcUrl);
+    
     const connection = new Connection(config.solanaTokensRpcUrl);
     const owner = new PublicKey(publicKey);
-    console.log('Запрашиваем токены для:', publicKey);
 
     // Увеличиваем задержку для rate limiting
     await delay(config.delayBetweenRequests);
@@ -128,7 +124,7 @@ export async function getTokenBalances(publicKey: string): Promise<TokenBalance[
       { programId: new PublicKey(TOKEN_PROGRAM_ID) }
     );
 
-    console.log('Получено токен аккаунтов:', response.value.length);
+    
     const tokenBalances: TokenBalance[] = [];
 
     for (const accountInfo of response.value) {
@@ -136,7 +132,6 @@ export async function getTokenBalances(publicKey: string): Promise<TokenBalance[
         const parsedData = accountInfo.account.data;
         
         if (!parsedData || !parsedData.parsed) {
-          console.log('Аккаунт: нет parsed данных');
           continue;
         }
 
@@ -144,11 +139,9 @@ export async function getTokenBalances(publicKey: string): Promise<TokenBalance[
         const amount = parsedData.parsed.info.tokenAmount.amount;
         const decimals = parsedData.parsed.info.tokenAmount.decimals;
 
-        console.log(`Аккаунт: mint = ${mint}, amount = ${amount}, decimals = ${decimals}`);
 
         // Пропускаем нулевые балансы
         if (amount === "0") {
-          console.log('Аккаунт: нулевой баланс, пропускаем');
           continue;
         }
 
@@ -172,7 +165,6 @@ export async function getTokenBalances(publicKey: string): Promise<TokenBalance[
           }
         }
 
-        console.log(`Найден токен: ${symbol} (${mint.slice(0, 8)}...) - ${formattedAmount} (decimals: ${decimals}, price: $${usdPrice})`);
 
         tokenBalances.push({
           mint,
@@ -182,13 +174,11 @@ export async function getTokenBalances(publicKey: string): Promise<TokenBalance[
           usdPrice,
           usdValue
         });
-      } catch (parseError) {
-        console.log('Ошибка парсинга токен аккаунта:', parseError);
+      } catch (_parseError) {
         continue;
       }
     }
 
-    console.log('Всего валидных токенов:', tokenBalances.length);
     return tokenBalances;
   } catch (error) {
     console.error('Ошибка получения токенов для', publicKey, ':', error);
@@ -206,7 +196,6 @@ export async function processWalletBalances(
 
   // Получаем цену SOL один раз для всех кошельков
   const solPrice = await getSolPrice();
-  console.log('Текущая цена SOL:', solPrice);
 
   // Обрабатываем каждый кошелек полностью
   for (let i = 0; i < wallets.length; i++) {
@@ -214,7 +203,7 @@ export async function processWalletBalances(
     const address = getWalletPublicKey(wallet);
     
     if (address !== 'Invalid wallet') {
-      console.log(`Обрабатываем кошелек: ${wallet.name} (${address})`);
+      
       
       // Уведомляем о прогрессе
       onProgress?.({
@@ -246,8 +235,6 @@ export async function processWalletBalances(
       
       // Уведомляем о загрузке кошелька
       onWalletLoaded?.(address, walletBalance);
-      
-      console.log(`Кошелек ${wallet.name} обработан, общая стоимость: $${totalUsdValue.toFixed(2)}`);
     }
   }
 
