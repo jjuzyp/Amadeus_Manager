@@ -231,16 +231,16 @@ export const sendSPLToken = async (params: SendTokenParams): Promise<SendResult>
   );
   baseInstructions.push(baseTransferIx);
 
-  // Получаем точное количество compute units через симуляцию
+  // Получаем примерную оценку CU на перевод (без ComputeBudget инструкций)
   const baseComputeUnits = await calculateComputeUnits(
     connection,
     baseInstructions,
     fromWallet,
     priorityFee || 50000
   );
-  
-  // Добавляем запас для ComputeBudgetProgram инструкций
-  const computeUnits = baseComputeUnits + 10000; // +10k для ComputeBudget инструкций
+
+  // Делаем безопасный запас: минимум 200k CU, либо симуляция + 50k
+  const computeUnits = Math.max(200_000, baseComputeUnits + 50_000);
 
   // Retry логика
   for (let attempt = 1; attempt <= (maxRetries || 3); attempt++) {
@@ -248,15 +248,11 @@ export const sendSPLToken = async (params: SendTokenParams): Promise<SendResult>
       const instructions = [];
 
       // Добавляем инструкцию для установки compute units
-      const computeUnitsIx = ComputeBudgetProgram.setComputeUnitLimit({
-        units: computeUnits
-      });
+      const computeUnitsIx = ComputeBudgetProgram.setComputeUnitLimit({ units: computeUnits });
       instructions.push(computeUnitsIx);
 
       // Добавляем приоритетную комиссию
-      const priorityFeeIx = ComputeBudgetProgram.setComputeUnitPrice({
-        microLamports: priorityFee || 50000
-      });
+      const priorityFeeIx = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: priorityFee || 50000 });
       instructions.push(priorityFeeIx);
 
       // Проверяем существование токен-аккаунта отправителя
@@ -332,6 +328,12 @@ export const sendSPLToken = async (params: SendTokenParams): Promise<SendResult>
       };
     } catch (error) {
       console.error(`Error sending SPL token (attempt ${attempt}):`, error);
+      try {
+        if (error instanceof SendTransactionError) {
+          const logs = await error.getLogs(connection);
+          console.error('Simulation logs:', logs);
+        }
+      } catch {}
       if (attempt === maxRetries) {
         return {
           success: false,

@@ -110,14 +110,25 @@ const WalletMainView: React.FC<{
     }
   }, [address, onCopyAddress]);
 
-  // Мемоизируем отсортированные токены
+  // Локальные вкладки активов: Tokens / NFTs
+  const [assetTab, setAssetTab] = React.useState<'tokens' | 'nfts'>('tokens');
+
+  // Фильтруем токены по активной вкладке
+  const filteredTokens = React.useMemo(() => {
+    if (assetTab === 'nfts') {
+      return tokens.filter(t => t.decimals === 0);
+    }
+    return tokens.filter(t => t.decimals > 0);
+  }, [tokens, assetTab]);
+
+  // Мемоизируем отсортированные токены выбранной вкладки
   const sortedTokens = React.useMemo(() => 
-    tokens
+    [...filteredTokens]
       .sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount))
       .map((token, index) => ({
         ...token,
         key: index
-      })), [tokens]);
+      })), [filteredTokens]);
 
   return (
     <>
@@ -146,20 +157,40 @@ const WalletMainView: React.FC<{
       <div className="wallet-address" onClick={copyToClipboard}>
         {formatAddress(address)}
       </div>
+      {/* Переключатель вкладок Tokens / NFTs */}
+      <div className="asset-tabs">
+        <button
+          className={`asset-tab-button ${assetTab === 'tokens' ? 'active' : ''}`}
+          onClick={() => setAssetTab('tokens')}
+          disabled={assetTab === 'tokens'}
+        >
+          Tokens
+        </button>
+        <button
+          className={`asset-tab-button ${assetTab === 'nfts' ? 'active' : ''}`}
+          onClick={() => setAssetTab('nfts')}
+          disabled={assetTab === 'nfts'}
+        >
+          NFTs
+        </button>
+      </div>
+
       <div className="wallet-balances">
-        <div className="token-item" onClick={() => onTokenClick({
-          mint: 'So11111111111111111111111111111111111111112',
-          amount: isNaN(balance) ? '0' : balance.toString(),
-          decimals: 9,
-          symbol: 'SOL',
-          usdPrice: solPrice,
-          usdValue: solPrice && !isNaN(balance) ? balance * solPrice : undefined
-        })}>
-          <span className="token-mint">SOL</span>
-          <span className="token-amount" title={solPrice && !isNaN(balance) ? `$${(balance * solPrice).toFixed(2)}` : ''}>
-            {isNaN(balance) ? 'Loading...' : `${balance.toFixed(9)}`}
-          </span>
-        </div>
+        {assetTab === 'tokens' && (
+          <div className="token-item" onClick={() => onTokenClick({
+            mint: 'So11111111111111111111111111111111111111112',
+            amount: isNaN(balance) ? '0' : balance.toString(),
+            decimals: 9,
+            symbol: 'SOL',
+            usdPrice: solPrice,
+            usdValue: solPrice && !isNaN(balance) ? balance * solPrice : undefined
+          })}>
+            <span className="token-mint">SOL</span>
+            <span className="token-amount" title={solPrice && !isNaN(balance) ? `$${(balance * solPrice).toFixed(2)}` : ''}>
+              {isNaN(balance) ? 'Loading...' : `${balance.toFixed(9)}`}
+            </span>
+          </div>
+        )}
         {sortedTokens.map((token) => (
           <div key={token.key} className="token-item" onClick={() => onTokenClick({
             ...token,
@@ -171,6 +202,11 @@ const WalletMainView: React.FC<{
             </span>
           </div>
         ))}
+        {sortedTokens.length === 0 && (
+          <div className="token-item" style={{ justifyContent: 'center', color: '#888' }}>
+            {assetTab === 'nfts' ? 'No NFTs' : 'No tokens'}
+          </div>
+        )}
       </div>
     </>
   );
@@ -197,12 +233,15 @@ const WalletCard: React.FC<{
   const [selectedToken, setSelectedToken] = useState<TokenBalance | null>(null);
   const [showSendView, setShowSendView] = useState(false);
   const [activeTab, setActiveTab] = useState<'wallet' | 'swap'>('wallet');
+  const [slideDir, setSlideDir] = useState<'left' | 'right'>('right');
 
   const handleTokenClick = React.useCallback((token: TokenBalance) => {
+    setSlideDir('right');
     setSelectedToken(token);
   }, []);
 
   const handleBackToWallet = React.useCallback(() => {
+    setSlideDir('left');
     setSelectedToken(null);
     setShowSendView(false);
     // Принудительно обновляем состояние редактирования
@@ -212,11 +251,13 @@ const WalletCard: React.FC<{
   }, [wallet.name]);
 
   const handleSendClick = React.useCallback(() => {
+    setSlideDir('right');
     setShowSendView(true);
   }, []);
 
   // Переключение вкладок главного окна кошелька
   const handleTabSwitch = React.useCallback((tab: 'wallet' | 'swap') => {
+    setSlideDir(tab === 'swap' ? 'right' : 'left');
     setActiveTab(tab);
     try {
       if (tab === 'swap') {
@@ -230,6 +271,7 @@ const WalletCard: React.FC<{
     const onExternalSwap = (e: Event) => {
       const ce = e as CustomEvent<{ address: string }>;
       if (ce.detail && ce.detail.address !== address) {
+        setSlideDir('left');
         setActiveTab('wallet');
       }
     };
@@ -353,6 +395,7 @@ const WalletCard: React.FC<{
 
   return (
     <div className="wallet-card" data-wallet={address}>
+      <div className={`wallet-content ${slideDir === 'right' ? 'slide-in-right' : 'slide-in-left'}`}>
       {selectedToken ? (
         showSendView ? (
                      <TokenSendView
@@ -362,7 +405,7 @@ const WalletCard: React.FC<{
              currentWallet={wallet}
              exactBalance={balance}
              config={config}
-             onBack={() => setShowSendView(false)}
+             onBack={() => { setSlideDir('left'); setShowSendView(false); }}
              onSend={handleSendToken}
            />
         ) : (
@@ -435,6 +478,7 @@ const WalletCard: React.FC<{
           </div>
         </>
       )}
+      </div>
     </div>
   );
 });

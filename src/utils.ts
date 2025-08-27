@@ -42,6 +42,10 @@ export const calculateComputeUnits = async (
 
 // Общая функция форматирования USD значения
 export const formatUsdValue = (value: number): string => {
+  // Если значение фактически ноль, показываем коротко
+  if (!isFinite(value) || Math.abs(value) === 0 || Math.abs(value) < 1e-9) {
+    return `$0`;
+  }
   if (value >= 1000000) {
     return `$${(value / 1000000).toFixed(2)}M`;
   } else if (value >= 1000) {

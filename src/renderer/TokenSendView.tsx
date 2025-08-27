@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TokenBalance, WalletData, Config } from '../types';
 import { getWalletPublicKey } from '../loadWallets';
 import { formatUsdValue, formatAddress } from '../utils';
+import { Connection, PublicKey, SystemProgram, TransactionMessage, ComputeBudgetProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
 
 interface TokenSendViewProps {
   token: TokenBalance;
@@ -29,10 +30,45 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
   const [showWalletList, setShowWalletList] = useState(false);
   const [step, setStep] = useState<'input' | 'confirm'>('input');
   const [isSending, setIsSending] = useState(false);
+  const [transitionDir, setTransitionDir] = useState<'left' | 'right'>('right');
+  const [maxSolCached, setMaxSolCached] = useState<number | null>(null);
+
+  const computeMaxSol = async (): Promise<number> => {
+    const rpcUrl = config.solanaTokensRpcUrl || config.solanaRpcUrl;
+    const connection = new Connection(rpcUrl);
+    const sender = new PublicKey(currentWalletAddress);
+
+    // Получаем актуальный баланс
+    const balanceLamports = await connection.getBalance(sender, 'finalized');
+
+    // Оценка комиссии: черновой transfer и расчет feeForMessage
+    const { blockhash } = await connection.getLatestBlockhash('finalized');
+    let toKey: PublicKey;
+    try { toKey = new PublicKey(recipient); } catch { toKey = sender; }
+    const draftIx = SystemProgram.transfer({ fromPubkey: sender, toPubkey: toKey, lamports: 0 });
+    const feeMsg = new TransactionMessage({ payerKey: sender, recentBlockhash: blockhash, instructions: [draftIx] }).compileToV0Message();
+    const feeRes = await connection.getFeeForMessage(feeMsg);
+    const feeLamports = feeRes.value ?? 5000;
+
+    // Приоритетная комиссия (та же логика, что при отправке)
+    const computeUnitLimit = 200_000;
+    const computeUnitPriceMicro = 1000;
+    const priorityFeeLamports = Math.floor((computeUnitLimit * computeUnitPriceMicro) / 1_000_000);
+
+    const maxSendable = Math.max(0, balanceLamports - feeLamports - priorityFeeLamports);
+    const maxSol = maxSendable / LAMPORTS_PER_SOL;
+    setMaxSolCached(maxSol);
+    return maxSol;
+  };
 
   const handleMaxClick = async () => {
     if (token.symbol === 'SOL') {
-      // Max for SOL temporarily disabled while we rewrite the logic
+      try {
+        const maxSol = await computeMaxSol();
+        setAmount(maxSol.toFixed(9));
+      } catch {
+        setAmount((exactBalance || 0).toFixed(9));
+      }
       return;
     }
     const decimals = token.decimals || 9;
@@ -40,8 +76,30 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
     setAmount(currentBalance.toFixed(decimals));
   };
 
+  const handleAmountChange = (val: string) => {
+    const normalized = val.replace(',', '.');
+    setAmount(normalized);
+    const n = parseFloat(normalized);
+    if (isNaN(n)) return;
+    if (token.symbol === 'SOL') {
+      const immediateCap = isNaN(exactBalance) ? n : exactBalance;
+      if (n > immediateCap) {
+        (maxSolCached !== null ? Promise.resolve(maxSolCached) : computeMaxSol())
+          .then(m => setAmount(m.toFixed(9)))
+          .catch(() => setAmount((exactBalance || 0).toFixed(9)));
+      }
+    } else {
+      const max = parseFloat(token.amount);
+      const decimals = token.decimals || 9;
+      if (n > max) {
+        setAmount(max.toFixed(decimals));
+      }
+    }
+  };
+
   const handleNext = () => {
     if (recipient.trim() && amount.trim() && parseFloat(amount) > 0) {
+      setTransitionDir('right');
       setStep('confirm');
     }
   };
@@ -66,6 +124,7 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
 
   const handleBack = () => {
     if (step === 'confirm') {
+      setTransitionDir('left');
       setStep('input');
     } else {
       onBack();
@@ -95,12 +154,9 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
 
   if (step === 'confirm') {
     return (
-      <div className="token-send-view">
-        {/* Header */}
+      <div className={`token-send-view ${transitionDir === 'right' ? 'slide-in-right' : 'slide-in-left'}`}>
+        {/* Header without back button */}
         <div className="token-send-header">
-          <button className="back-button" onClick={handleBack}>
-            ‹
-          </button>
           <div className="token-send-title">
             <h3>Подтверждение отправки</h3>
           </div>
@@ -137,7 +193,7 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
 
         {/* Action buttons */}
         <div className="token-send-actions">
-          <button className="action-button cancel-button" onClick={handleCancel} disabled={isSending}>
+          <button className="action-button cancel-button" onClick={onBack}>
             Отмена
           </button>
           <button className="action-button confirm-button" onClick={handleConfirm} disabled={isSending}>
@@ -149,12 +205,9 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
   }
 
   return (
-    <div className="token-send-view">
-      {/* Header */}
+    <div className={`token-send-view ${transitionDir === 'right' ? 'slide-in-right' : 'slide-in-left'}`}>
+      {/* Header without back button */}
       <div className="token-send-header">
-        <button className="back-button" onClick={handleBack}>
-          ‹
-        </button>
         <div className="token-send-title">
           <h3>Отправить {token.symbol || 'токен'}</h3>
         </div>
@@ -201,11 +254,14 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
           <input
             type="text"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => handleAmountChange(e.target.value)}
             placeholder="0.0"
             className="amount-input"
           />
           <span className="token-symbol">{token.symbol}</span>
+          <button className="max-button-small max-inline" onClick={handleMaxClick}>
+            Max
+          </button>
         </div>
         <div className="amount-info">
           <span className="usd-value">
@@ -215,11 +271,6 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
             <span className="available-balance">
               Доступно {token.amount} {token.symbol}
             </span>
-            {token.symbol !== 'SOL' && (
-              <button className="max-button-small" onClick={handleMaxClick}>
-                Max
-              </button>
-            )}
           </div>
         </div>
       </div>

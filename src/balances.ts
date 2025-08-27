@@ -15,8 +15,9 @@ interface JupiterToken {
   tags?: string[];
 }
 
-// Константа для TOKEN_PROGRAM_ID
+// Константы для SPL Token программ
 const TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+const TOKEN_2022_PROGRAM_ID = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
 
 // Кэш только для символов токенов (они не меняются)
 const tokenSymbolCache = new Map<string, string>();
@@ -119,15 +120,24 @@ export async function getTokenBalances(publicKey: string): Promise<TokenBalance[
     // Увеличиваем задержку для rate limiting
     await delay(config.delayBetweenRequests);
 
-    const response = await connection.getParsedTokenAccountsByOwner(
-      owner,
-      { programId: new PublicKey(TOKEN_PROGRAM_ID) }
-    );
+    // Получаем аккаунты для обеих программ: стандартной и Token-2022
+    const [legacyResp, token2022Resp] = await Promise.all([
+      connection.getParsedTokenAccountsByOwner(
+        owner,
+        { programId: new PublicKey(TOKEN_PROGRAM_ID) }
+      ),
+      connection.getParsedTokenAccountsByOwner(
+        owner,
+        { programId: new PublicKey(TOKEN_2022_PROGRAM_ID) }
+      )
+    ]);
 
-    
+    // Объединяем результаты
+    const allAccounts = [...legacyResp.value, ...token2022Resp.value];
+
     const tokenBalances: TokenBalance[] = [];
 
-    for (const accountInfo of response.value) {
+    for (const accountInfo of allAccounts) {
       try {
         const parsedData = accountInfo.account.data;
         

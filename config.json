@@ -1,9 +1,9 @@
 {
-  "solanaRpcUrl": "https://solana.drpc.org",
+  "solanaRpcUrl": "https://mainnet.helius-rpc.com/?api-key=3d10df96-0671-4cf4-9a01-0b4c48776655",
   "solanaTokensRpcUrl": "https://mainnet.helius-rpc.com/?api-key=3d10df96-0671-4cf4-9a01-0b4c48776655",
   "autoRefreshInterval": 9999999,
   "delayBetweenRequests": 100,
-  "priorityFee": 50000,
+  "priorityFee": 200000,
   "maxRetries": 1,
   "confirmationTimeout": 30
 }
