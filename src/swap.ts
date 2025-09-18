@@ -68,6 +68,7 @@ export interface MountPluginOptions {
   initialInputMint?: string;
   initialOutputMint?: string;
   initialAmount?: string; // UI units
+  onSuccess?: (args: any) => void;
   // Wallet passthrough context
   wallet?: {
     publicKey: any;
@@ -153,10 +154,13 @@ export async function mountJupiterPlugin(targetElementId: string, opts: MountPlu
       swapMode: 'ExactInOrOut',
       initialAmount: opts.initialAmount,
       initialInputMint: opts.initialInputMint,
-      initialOutputMint: opts.initialOutputMint
+      initialOutputMint: opts.initialOutputMint,
+      // Jupiter Plugin referral settings
+      referralAccount: 'Eff8hoUxkgGCdo4ApaU6BabUfvBiJhP5EJMy6dB9W3sY',
+      referralFee: 50
     },
     onFormUpdate: () => {},
-    onSuccess: () => {},
+    onSuccess: opts.onSuccess || (() => {}),
     onSwapError: ({ error, quoteResponseMeta }) => {
       // Печатаем ошибки подробнее, чтобы диагностировать "e is not iterable"
       try {

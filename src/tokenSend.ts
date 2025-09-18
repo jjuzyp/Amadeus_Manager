@@ -96,7 +96,14 @@ export const sendSOL = async (params: SendTokenParams): Promise<SendResult> => {
     };
   }
 
-  // Retry логика
+  // Retry логика с таймаутом подтверждения 10с
+  const confirmWithTimeout = async (p: Promise<any>, ms: number) => {
+    return Promise.race([
+      p.then((v) => ({ ok: true, v })).catch((e) => ({ ok: false, e })),
+      new Promise((resolve) => setTimeout(() => resolve({ ok: false, timeout: true }), ms))
+    ]) as Promise<{ ok: boolean; v?: any; e?: any; timeout?: boolean }>;
+  };
+
   for (let attempt = 1; attempt <= (maxRetries || 3); attempt++) {
     try {
       // Получаем свежий blockhash на каждую попытку
@@ -123,20 +130,23 @@ export const sendSOL = async (params: SendTokenParams): Promise<SendResult> => {
       const txid = await transactionConnection.sendTransaction(transaction, { skipPreflight: true });
       
       // Ждем подтверждения с увеличенным таймаутом
-      const confirmation = await transactionConnection.confirmTransaction({
-        signature: txid,
-        blockhash,
-        lastValidBlockHeight
-      }, 'confirmed');
-      
-      if (confirmation.value.err) {
+      const confirmation = await confirmWithTimeout(
+        transactionConnection.confirmTransaction({
+          signature: txid,
+          blockhash,
+          lastValidBlockHeight
+        }, 'confirmed'),
+        10000
+      );
+
+      if (!confirmation.ok || (confirmation.v && confirmation.v.value && confirmation.v.value.err)) {
         if (attempt === maxRetries) {
           return {
             success: false,
-            error: 'Транзакция не была подтверждена'
+            error: 'Транзакция не была подтверждена за 10с'
           };
         }
-        // retry silently
+        // retry: создаём новую транзакцию на следующей итерации
         continue;
       }
 
@@ -150,8 +160,19 @@ export const sendSOL = async (params: SendTokenParams): Promise<SendResult> => {
         if (error instanceof SendTransactionError) {
           const logs = await error.getLogs(transactionConnection);
           console.error('Simulation logs:', logs);
+          const text = (Array.isArray(logs) ? logs.join('\n') : String(logs)).toLowerCase();
+          if (text.includes('insufficient lamports')) {
+            if (attempt === maxRetries) {
+              return { success: false, error: 'insufficient SOL' };
+            }
+            // no sense retrying; balance issue
+            return { success: false, error: 'insufficient SOL' };
+          }
         }
       } catch {}
+      if ((error as any)?.message && String((error as any).message).toLowerCase().includes('insufficient lamports')) {
+        return { success: false, error: 'insufficient SOL' };
+      }
       if (attempt === maxRetries) {
         return {
           success: false,
@@ -242,7 +263,14 @@ export const sendSPLToken = async (params: SendTokenParams): Promise<SendResult>
   // Делаем безопасный запас: минимум 200k CU, либо симуляция + 50k
   const computeUnits = Math.max(200_000, baseComputeUnits + 50_000);
 
-  // Retry логика
+  // Retry логика с таймаутом подтверждения 10с
+  const confirmWithTimeout = async (p: Promise<any>, ms: number) => {
+    return Promise.race([
+      p.then((v) => ({ ok: true, v })).catch((e) => ({ ok: false, e })),
+      new Promise((resolve) => setTimeout(() => resolve({ ok: false, timeout: true }), ms))
+    ]) as Promise<{ ok: boolean; v?: any; e?: any; timeout?: boolean }>;
+  };
+
   for (let attempt = 1; attempt <= (maxRetries || 3); attempt++) {
     try {
       const instructions = [];
@@ -309,16 +337,19 @@ export const sendSPLToken = async (params: SendTokenParams): Promise<SendResult>
       const txid = await connection.sendTransaction(transaction);
       
       // Ждем подтверждения
-      const confirmation = await connection.confirmTransaction(txid, 'confirmed');
-      
-      if (confirmation.value.err) {
+      const confirmation = await confirmWithTimeout(
+        connection.confirmTransaction(txid, 'confirmed'),
+        10000
+      );
+
+      if (!confirmation.ok || (confirmation.v && confirmation.v.value && confirmation.v.value.err)) {
         if (attempt === maxRetries) {
           return {
             success: false,
-            error: 'Транзакция не была подтверждена'
+            error: 'Транзакция не была подтверждена за 10с'
           };
         }
-        console.log(`Попытка ${attempt} не удалась, повторяем...`);
+        console.log(`Попытка ${attempt} не удалась (нет подтверждения), повторяем...`);
         continue;
       }
 
@@ -332,8 +363,15 @@ export const sendSPLToken = async (params: SendTokenParams): Promise<SendResult>
         if (error instanceof SendTransactionError) {
           const logs = await error.getLogs(connection);
           console.error('Simulation logs:', logs);
+          const text = (Array.isArray(logs) ? logs.join('\n') : String(logs)).toLowerCase();
+          if (text.includes('insufficient lamports')) {
+            return { success: false, error: 'insufficient SOL' };
+          }
         }
       } catch {}
+      if ((error as any)?.message && String((error as any).message).toLowerCase().includes('insufficient lamports')) {
+        return { success: false, error: 'insufficient SOL' };
+      }
       if (attempt === maxRetries) {
         return {
           success: false,
@@ -352,3 +390,4 @@ export const sendSPLToken = async (params: SendTokenParams): Promise<SendResult>
 };
 
 
+// Сжигание всех токенов с ассоциированного токен-аккаунта владельца

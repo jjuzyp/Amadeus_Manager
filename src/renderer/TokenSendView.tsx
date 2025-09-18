@@ -158,7 +158,7 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
         {/* Header without back button */}
         <div className="token-send-header">
           <div className="token-send-title">
-            <h3>Подтверждение отправки</h3>
+            <h3>Confirm Send</h3>
           </div>
         </div>
 
@@ -169,23 +169,23 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
           </div>
           <div className="token-details">
             <div className="token-name">{token.symbol || token.mint.slice(0, 8) + '...'}</div>
-            <div className="token-balance">Баланс: {token.amount}</div>
+            <div className="token-balance">Balance: {token.amount}</div>
           </div>
         </div>
 
         {/* Confirmation details */}
         <div className="confirmation-details">
           <div className="detail-row">
-            <span className="detail-label">Получатель:</span>
+            <span className="detail-label">Recipient:</span>
             <span className="detail-value">{formatAddress(recipient)}</span>
           </div>
           <div className="detail-row">
-            <span className="detail-label">Сумма:</span>
+            <span className="detail-label">Amount:</span>
             <span className="detail-value">{amount} {token.symbol}</span>
           </div>
           {estimatedUsdValue > 0 && (
             <div className="detail-row">
-              <span className="detail-label">Стоимость:</span>
+              <span className="detail-label">Value:</span>
               <span className="detail-value">{formatUsdValue(estimatedUsdValue)}</span>
             </div>
           )}
@@ -194,10 +194,10 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
         {/* Action buttons */}
         <div className="token-send-actions">
           <button className="action-button cancel-button" onClick={onBack}>
-            Отмена
+            Cancel
           </button>
           <button className="action-button confirm-button" onClick={handleConfirm} disabled={isSending}>
-            {isSending ? 'Отправка...' : 'Отправить'}
+            {isSending ? 'Sending...' : 'Send'}
           </button>
         </div>
       </div>
@@ -209,19 +209,19 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
       {/* Header without back button */}
       <div className="token-send-header">
         <div className="token-send-title">
-          <h3>Отправить {token.symbol || 'токен'}</h3>
+          <h3>Send {token.symbol || 'token'}</h3>
         </div>
       </div>
 
       {/* Recipient input */}
       <div className="input-section">
-        <label className="input-label">Получатель</label>
+        <label className="input-label">Recipient</label>
         <div className="input-container">
           <input
             type="text"
             value={recipient}
             onChange={(e) => setRecipient(e.target.value)}
-            placeholder="Адрес получателя Solana"
+            placeholder="Solana recipient address"
             className="recipient-input"
           />
           <button 
@@ -249,7 +249,7 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
 
       {/* Amount input */}
       <div className="input-section">
-        <label className="input-label">Сумма</label>
+        <label className="input-label">Amount</label>
         <div className="input-container">
           <input
             type="text"
@@ -269,7 +269,7 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
           </span>
           <div className="available-balance-container">
             <span className="available-balance">
-              Доступно {token.amount} {token.symbol}
+              Available {token.amount} {token.symbol}
             </span>
           </div>
         </div>
@@ -278,14 +278,14 @@ const TokenSendView: React.FC<TokenSendViewProps> = ({
       {/* Action buttons */}
       <div className="token-send-actions">
         <button className="action-button cancel-button" onClick={handleBack}>
-          Отмена
+          Cancel
         </button>
         <button 
           className="action-button next-button" 
           onClick={handleNext}
           disabled={!recipient.trim() || !amount.trim() || parseFloat(amount) <= 0}
         >
-          Далее
+          Next
         </button>
       </div>
     </div>

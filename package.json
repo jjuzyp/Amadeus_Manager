@@ -1,5 +1,5 @@
 {
-  "name": "walletmanager",
+  "name": "amadeusmanager",
   "version": "1.0.0",
   "main": "dist/main.js",
   "scripts": {
@@ -16,6 +16,7 @@
     "@types/node": "^24.2.0",
     "css-loader": "^7.1.2",
     "electron": "^37.2.6",
+    "electron-builder": "^26.0.12",
     "html-webpack-plugin": "^5.6.3",
     "style-loader": "^4.0.0",
     "ts-loader": "^9.5.2",
@@ -38,5 +39,34 @@
     "react-dom": "^19.1.1",
     "stream-browserify": "^3.0.0",
     "util": "^0.12.5"
+  },
+  "build": {
+    "appId": "com.amadeusmanager.app",
+    "productName": "Amadeus Manager",
+    "directories": {
+      "output": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "node_modules/**/*",
+      "index.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "config.json",
+        "to": "config.json"
+      },
+      {
+        "from": "wallets.json",
+        "to": "wallets.json"
+      }
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "Logo3.ico",
+      "signAndEditExecutable": false,
+      "forceCodeSigning": false
+    }
   }
 }

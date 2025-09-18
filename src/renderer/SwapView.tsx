@@ -10,9 +10,10 @@ interface SwapViewProps {
   config: Config;
   onBack: () => void;
   onNotify: (msg: string) => void;
+  onSwapSuccess?: (txid: string, inputMint: string, outputMint: string, inputAmount: string, outputAmount: string) => void;
 }
 
-const SwapView: React.FC<SwapViewProps> = ({ token, wallet, config }) => {
+const SwapView: React.FC<SwapViewProps> = ({ token, wallet, config, onSwapSuccess }) => {
   const containerId = useMemo(() => `jupiter-plugin-${getWalletPublicKey(wallet)}`, [wallet]);
 
   useEffect(() => {
@@ -67,7 +68,17 @@ const SwapView: React.FC<SwapViewProps> = ({ token, wallet, config }) => {
         initialAmount: undefined,
         initialOutputMint: undefined,
         wallet: walletAdapter,
-        connection
+        connection,
+        onSuccess: (args: any) => {
+          if (onSwapSuccess && args?.txid) {
+            // Try to extract swap details from args
+            const inputMint = args.inputMint || token?.mint || 'Unknown';
+            const outputMint = args.outputMint || 'Unknown';
+            const inputAmount = args.inputAmount || 'Unknown';
+            const outputAmount = args.outputAmount || 'Unknown';
+            onSwapSuccess(args.txid, inputMint, outputMint, inputAmount, outputAmount);
+          }
+        }
       });
     };
 

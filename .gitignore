@@ -58,3 +58,7 @@ temp/
 
 # Wallet data
 wallets.json
+config.json
+
+# Icons
+Logo3.ico

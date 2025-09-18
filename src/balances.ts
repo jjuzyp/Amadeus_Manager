@@ -175,6 +175,31 @@ export async function getTokenBalances(publicKey: string): Promise<TokenBalance[
           }
         }
 
+        // Попытаться распознать NFT: decimals === 0
+        let nftName: string | undefined;
+        let nftImageUrl: string | undefined;
+        let isNft: boolean | undefined;
+        if (decimals === 0) {
+          isNft = true;
+          try {
+            // Для mint пробуем получить on-chain metadata PDA (Metaplex)
+            // Но чтобы не тянуть ончейн, попробуем быстрый путь:
+            // getParsedAccountInfo для mint может содержать metadata uri в extensions для Token-2022, однако чаще используем Metaplex Metadata Account
+            const metadataPDA = await findMetaplexMetadataPDA(mint);
+            const acc = await connection.getAccountInfo(metadataPDA);
+            if (acc && acc.data) {
+              const uri = extractUriFromMetadata(acc.data);
+              if (uri) {
+                const json = await fetchSafeJson(uri);
+                if (json) {
+                  nftName = typeof json.name === 'string' ? json.name : undefined;
+                  nftImageUrl = typeof json.image === 'string' ? normalizeIpfsUrl(json.image) : undefined;
+                }
+              }
+            }
+          } catch {}
+        }
+
 
         tokenBalances.push({
           mint,
@@ -182,7 +207,10 @@ export async function getTokenBalances(publicKey: string): Promise<TokenBalance[
           decimals,
           symbol,
           usdPrice,
-          usdValue
+          usdValue,
+          nftName,
+          nftImageUrl,
+          isNft
         });
       } catch (_parseError) {
         continue;
@@ -295,3 +323,56 @@ function calculateWalletTotalValue(solBalance: number, solPrice: number, tokenBa
   
   return totalValue;
 } 
+
+// --- NFT helpers ---
+import { PublicKey as PK } from '@solana/web3.js';
+
+// Metaplex Metadata Program ID (Token Metadata)
+const METAPLEX_METADATA_PROGRAM = new PK('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+
+async function findMetaplexMetadataPDA(mint: string): Promise<PK> {
+  const mintKey = new PK(mint);
+  const [pda] = await (PK as any).findProgramAddress(
+    [Buffer.from('metadata'), METAPLEX_METADATA_PROGRAM.toBuffer(), mintKey.toBuffer()],
+    METAPLEX_METADATA_PROGRAM
+  );
+  return pda as PK;
+}
+
+function extractUriFromMetadata(data: Buffer): string | undefined {
+  try {
+    // Metaplex Metadata is Borsh-serialized. For simplicity, do a rough search for URI as UTF-8.
+    // This is a heuristic but usually works when URI is ASCII/UTF-8 and null-terminated.
+    const text = data.toString('utf8');
+    const httpIdx = text.indexOf('http');
+    const ipfsIdx = text.indexOf('ipfs://');
+    const start = httpIdx >= 0 ? httpIdx : ipfsIdx;
+    if (start < 0) return undefined;
+    // URI typically ends before many nulls; cut at first control char sequence
+    let end = start;
+    while (end < text.length && text.charCodeAt(end) > 31) end++;
+    const uri = text.slice(start, end).trim();
+    return uri;
+  } catch {
+    return undefined;
+  }
+}
+
+async function fetchSafeJson(uri: string): Promise<any | null> {
+  try {
+    const url = normalizeIpfsUrl(uri);
+    const resp = await fetch(url, { method: 'GET' });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
+function normalizeIpfsUrl(url: string): string {
+  if (!url) return url;
+  if (url.startsWith('ipfs://')) {
+    return `https://nftstorage.link/ipfs/${url.replace('ipfs://', '')}`;
+  }
+  return url;
+}

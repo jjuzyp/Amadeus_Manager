@@ -1,16 +1,9 @@
-# Wallet Manager
+# Amadeus Manager
 
-Десктопное приложение для управления Solana кошельками, построенное на Electron и React.
+Desktop application for managing Solana wallets, built on Electron and React.
 
-## Возможности
 
-- Управление множественными Solana кошельками
-- Просмотр балансов токенов
-- Отправка токенов
-- Автоматическое обновление балансов
-- Современный пользовательский интерфейс
-
-## Технологии
+## Technology
 
 - **Frontend**: React, TypeScript
 - **Backend**: Electron, Node.js
@@ -18,63 +11,45 @@
 - **Build**: Webpack, TypeScript
 - **UI**: CSS Modules, React DOM
 
-## Установка
+## Installation
 
-### Требования
-- Node.js (версия 16 или выше)
-- npm или yarn
-- Подключение к интернету для работы с Solana RPC
+### Requirements
+- Node.js (version 16 or above )
+- npm or yarn
 
-### Шаги установки
+### Installation steps
 
-1. Клонируйте репозиторий:
+1. Clone repository:
 ```bash
-git clone https://github.com/jjuzyp/WorkNameWalletManager.git
-cd wallet-manager
+git clone https://github.com/jjuzyp/Amadeus_Manager.git
 ```
 
-2. Установите зависимости:
+2. Install dependencies:
 ```bash
 npm install
 ```
 
-3. Создайте файл `wallets.json` в корне проекта:
-```json
-[
-  {
-    "name": "Wallet 1",
-    "secretKey": "your-secret-key-here"
-  }
-]
-```
 
-## Запуск
+## Start
 
-Для сборки приложения:
+Build the application:
 ```bash
 npm run build
 ```
 
-Запустите приложение:
+Start app:
 ```bash
 npm start
 ```
 
-## Конфигурация
+## Configuration
 
-Настройки приложения находятся в файле `config.json`:
+The application configurations are located in `config.json`:
 
-- `solanaRpcUrl` - RPC для получения балансов SOL
+- `solanaRpcUrl` - RPC for SOL Balance
 - `solanaTokensRpcUrl` - Main RPC
-- `autoRefreshInterval` - интервал автоматического обновления
-- `delayBetweenRequests` - задержка между запросами
-- `priorityFee` - приоритетная комиссия
-- `maxRetries` - максимальное количество попыток
-- `confirmationTimeout` - таймаут подтверждения
-
-
-## Лицензия
-
-ISC
-
-Это все писала нейросеть я чуть отредачил
+- `autoRefreshInterval` - Auto-redfresh interval
+- `delayBetweenRequests` - Delay between requests
+- `priorityFee` - Priority fee
+- `maxRetries` - Max transaction retries
+- `confirmationTimeout` - confirmation timeout

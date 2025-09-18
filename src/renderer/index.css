@@ -17,6 +17,172 @@ body {
   min-height: 100vh;
 }
 
+.app-body {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 16px;
+}
+
+.sidebar {
+  background: #23272f;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 12px;
+  height: calc(100vh - 120px);
+  position: sticky;
+  top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-item {
+  padding: 10px 12px;
+  border-radius: 6px;
+  color: #fff;
+  background: #181a20;
+  border: 1px solid #333;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-item:hover { background: #2d313a; border-color: #555; }
+.sidebar-item.active { background: #0f1217; border-color: #007bff; }
+
+.content-area {
+  min-height: calc(100vh - 120px);
+}
+.drainer-panel {
+  background: #23272f;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.drainer-form { display: flex; flex-direction: column; gap: 12px; }
+.drainer-item { display: flex; flex-direction: column; gap: 6px; }
+.drainer-item label { font-weight: bold; color: #fff; }
+.drainer-item select,
+.drainer-item input {
+  padding: 8px 12px;
+  background: #181a20;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 14px;
+}
+.drainer-source-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.wallet-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.wallet-chip { background: #0f1217; border: 1px solid #2b3240; color: #cfd3da; padding: 6px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
+.wallet-chip-remove { background: none; border: none; color: #cfd3da; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
+.wallet-chip-remove:hover { color: #fff; }
+.drainer-wallet-select { min-width: 260px; }
+.drainer-actions { display: flex; gap: 10px; }
+.drainer-actions button { padding: 8px 16px; background: #0d6efd; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.drainer-actions button[disabled] { opacity: 0.6; cursor: not-allowed; }
+.drainer-log { margin-top: 8px; background: #181a20; border: 1px solid #333; border-radius: 6px; max-height: 220px; overflow-y: auto; padding: 8px; }
+.drainer-log-line { font-size: 12px; color: #cfd3da; padding: 2px 0; }
+
+/* Chip-input for drainer sources */
+.chip-input {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #181a20;
+  border: 1px solid #444;
+  border-radius: 6px;
+  min-height: 38px;
+  padding: 6px 8px;
+  position: relative;
+  cursor: text;
+}
+
+.chip-input-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  flex: 1;
+}
+
+.chip-placeholder { color: #7f8797; font-size: 13px; }
+
+.chip-caret {
+  background: none;
+  border: none;
+  color: #cfd3da;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+.chip-caret:hover { background: rgba(255, 255, 255, 0.06); }
+
+.chip-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #1a1d24;
+  border: 1px solid #444;
+  border-radius: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.chip-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  color: #fff;
+  border-bottom: 1px solid #333;
+  cursor: pointer;
+}
+.chip-option:hover { background: #2d313a; }
+.chip-option:last-child { border-bottom: none; }
+.chip-option.disabled { opacity: 0.6; cursor: default; }
+.chip-option-name { font-weight: 600; }
+.chip-option-address { color: #7f8797; font-size: 12px; margin-left: 8px; }
+
+.sidebar-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  mix-blend-mode: screen;
+  filter: invert(1) grayscale(1) brightness(1.25) contrast(1.1);
+  border-radius: 3px;
+  background: transparent;
+}
+
+/* Custom SOL redeem icon */
+.sol-redeem-icon {
+  background: linear-gradient(135deg, #9945FF 0%, #14F195 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: white;
+  filter: none;
+  mix-blend-mode: normal;
+}
+
+/* History icon styling - smaller and grayer */
+.history-icon {
+  transform: scale(0.8);
+}
+
+.history-icon .wallet-tab-icon-img {
+  filter: invert(1) grayscale(1) brightness(0.6) contrast(0.8);
+  opacity: 0.7;
+}
+
 .header {
   display: flex;
   justify-content: space-between;
@@ -24,6 +190,38 @@ body {
   margin-bottom: 20px;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+/* RPC warning banner */
+.rpc-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #3a2b00;
+  border: 1px solid #e0a800;
+  color: #ffd65a;
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin: -10px 0 10px 0;
+}
+
+.rpc-warning-text {
+  font-size: 14px;
+}
+
+.rpc-warning-button {
+  background: #e0a800;
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.rpc-warning-button:hover {
+  background: #ffc107;
 }
 
 .header h1 {
@@ -169,6 +367,21 @@ body {
   pointer-events: none;
 }
 
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 0;
+  color: #cfd3da;
+}
+
+.empty-actions {
+  display: flex;
+  gap: 10px;
+}
+
 .swap-progress-pill {
   position: fixed;
   top: 20px;
@@ -241,6 +454,280 @@ body {
   color: #fff;
   border: 1.5px solid #222;
 }
+
+/* Wallet Manager */
+.manager-panel {
+  background: #23272f;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.manager-actions { display: flex; gap: 8px; margin-bottom: 12px; }
+.manager-button {
+  padding: 10px 14px;
+  background: #23272f;
+  color: #fff;
+  border: 1px solid #444;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.manager-button:hover { background: #2d313a; border-color: #007bff; }
+
+.wallet-inline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wallet-inline-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #181a20;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.wallet-inline-name { font-size: 13px; color: #cfd3da; font-weight: 600; }
+.wallet-inline-address {
+  font-size: 13px;
+  color: #9fb4ff;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+.wallet-inline-address:hover { text-decoration: underline; }
+
+.wallet-inline-delete {
+  background: none;
+  border: 1px solid #444;
+  color: #cfd3da;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.wallet-inline-delete:hover { border-color: #dc3545; background: rgba(220,53,69,0.1); color: #fff; }
+
+.wallet-inline-copy {
+  background: none;
+  border: 1px solid #444;
+  color: #cfd3da;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.wallet-inline-copy:hover { border-color: #28a745; background: rgba(40,167,69,0.1); color: #fff; }
+
+/* Transaction History Styles */
+.transaction-history-view {
+  padding: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.transaction-history-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #444;
+}
+
+.back-button {
+  background: none;
+  border: 1px solid #444;
+  color: #cfd3da;
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.back-button:hover {
+  background: #2d313a;
+  border-color: #007bff;
+}
+
+.transaction-history-header h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 18px;
+}
+
+.transaction-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.empty-transactions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #888;
+  font-size: 16px;
+}
+
+.transaction-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #181a20;
+  border: 1px solid #333;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.transaction-item:hover {
+  background: #1e2026;
+}
+
+.transaction-icon {
+  flex-shrink: 0;
+}
+
+.solana-logo {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.solana-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bar {
+  width: 20px;
+  height: 3px;
+  border-radius: 1px;
+}
+
+.bar.purple { background: #9945ff; }
+.bar.green { background: #14f195; }
+.bar.blue { background: #00d4ff; }
+
+.direction-arrow {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #9945ff;
+  color: white;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+
+.direction-arrow.sent {
+  background: #dc3545;
+}
+
+.direction-arrow.received {
+  background: #28a745;
+}
+
+.transaction-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.transaction-type {
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.transaction-counterparty {
+  color: #9fb4ff;
+  font-size: 13px;
+}
+
+.transaction-time {
+  color: #888;
+  font-size: 12px;
+}
+
+.transaction-amount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.amount {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.amount.sent {
+  color: #fff;
+}
+
+.amount.received {
+  color: #28a745;
+}
+
+.copy-txid-button {
+  background: none;
+  border: 1px solid #444;
+  color: #cfd3da;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.copy-txid-button:hover {
+  background: #2d313a;
+  border-color: #007bff;
+  color: #fff;
+}
+
+.textarea-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: #181a20;
+  border: 1px solid #444;
+  border-radius: 6px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  resize: none;
+}
+
+/* Prevent modal inputs from overflowing horizontal bounds */
+.confirm-dialog input,
+.confirm-dialog textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.error-text { color: #dc3545; font-size: 12px; margin-top: -6px; }
 
 .wallets-grid {
   display: grid;
@@ -521,9 +1008,35 @@ body {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 12px;
+  /* Чуть-чуть места снизу, чтобы кнопки не упирались в край */
+  padding: 12px 12px 28px 12px;
   overflow-y: auto;
+  box-sizing: border-box;
 }
+
+/* Overlay подтверждения */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.confirm-dialog {
+  width: 320px;
+  background: #23272f;
+  border: 1px solid #444;
+  border-radius: 8px;
+  color: #fff;
+  padding: 14px;
+}
+
+.confirm-title { font-weight: 700; margin-bottom: 6px; }
+.confirm-body { font-size: 13px; color: #cfd3da; margin-bottom: 12px; }
+.confirm-actions { display: flex; gap: 10px; }
 
 /* Swap redesigned */
 .swap-view {
@@ -778,6 +1291,40 @@ body {
   font-weight: bold;
 }
 
+/* base style for mini action icons */
+.mini-action-icon {
+  object-fit: contain;
+  margin-right: 6px;
+  mix-blend-mode: screen;
+  filter: invert(1) grayscale(1) brightness(1.25) contrast(1.1);
+  border-radius: 3px;
+}
+
+/* specific sizes */
+.solscan-mini-icon {
+  width: 16px;
+  height: 16px;
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-right: 0;
+}
+
+.burn-mini-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  mix-blend-mode: screen;
+  filter: invert(1) grayscale(1) brightness(1.3) contrast(1.05);
+  opacity: 0.85;
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-right: 0;
+}
+
 .token-price-section {
   text-align: center;
   margin-bottom: 12px;
@@ -827,6 +1374,87 @@ body {
   gap: 10px;
   margin-top: 8px;
   flex-shrink: 0;
+}
+
+.more-button-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  position: relative; /* to anchor overlay */
+}
+
+.more-overlay-list {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 3;
+  overflow: visible;
+}
+
+.mini-action-button {
+  position: relative;
+  font-size: 11px;
+  padding: 8px 10px;
+  background: #23272f;
+  color: #cfd3da;
+  border: 1px solid #444;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+.mini-action-button:hover {
+  background: #2d313a;
+  border-color: #007bff;
+}
+
+/* burn изображение бывает с белой точкой — усилим фильтр */
+.burn-icon {
+  filter: invert(1) grayscale(1) brightness(1.35) contrast(1.2);
+}
+
+/* burn icon стилизуется теми же правилами, что и .mini-action-icon */
+
+/* Keep Burn button geometry compact while showing large icon overlapping */
+.burn-mini {
+  position: relative;
+  height: 45px;
+  padding: 10px 10px 10px 28px; /* место под левую иконку */
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: left;
+}
+
+.burn-mini-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.mini-action-button span { display: inline-block; }
+
+/* ensure left padding for solscan row */
+.view-solscan-mini {
+  position: relative;
+  padding-left: 28px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .action-button {

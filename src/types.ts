@@ -10,6 +10,10 @@ export interface TokenBalance {
   symbol?: string;
   usdPrice?: number;
   usdValue?: number;
+  // NFT specific
+  nftName?: string;
+  nftImageUrl?: string;
+  isNft?: boolean;
 }
 
 export interface WalletBalances {
@@ -39,6 +43,7 @@ declare global {
       getConfig: () => Promise<any>;
       saveConfig: (config: any) => Promise<boolean>;
       updateWalletName: (address: string, newName: string) => Promise<boolean>;
+      openExternal: (url: string) => Promise<boolean>;
     };
   }
 } 
