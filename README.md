@@ -10,11 +10,12 @@ Desktop application for managing Solana wallets, built on Electron and React.
 - **Blockchain**: Solana Web3.js, SPL Token
 - **Build**: Webpack, TypeScript
 - **UI**: CSS Modules, React DOM
+- **Portable**: Built with electron-builder
 
 ## Installation
 
 ### Requirements
-- Node.js (version 16 or above )
+- Node.js (version 16 or above)
 - npm or yarn
 
 ### Installation steps
@@ -53,3 +54,6 @@ The application configurations are located in `config.json`:
 - `priorityFee` - Priority fee
 - `maxRetries` - Max transaction retries
 - `confirmationTimeout` - confirmation timeout
+
+## Usage Guide
+https://jjuzyp.gitbook.io/amadeus-manager/
