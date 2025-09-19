@@ -49,7 +49,7 @@ The application configurations are located in `config.json`:
 
 - `solanaRpcUrl` - RPC for SOL Balance
 - `solanaTokensRpcUrl` - Main RPC
-- `autoRefreshInterval` - Auto-redfresh interval
+- `autoRefreshInterval` - Auto-refresh interval
 - `delayBetweenRequests` - Delay between requests
 - `priorityFee` - Priority fee
 - `maxRetries` - Max transaction retries
